@@ -1,70 +1,63 @@
-# Daily job scraper
+# Daily job scraper (version 2)
 
-Every morning it checks company career pages (Greenhouse, Lever, Ashby) and
-optionally Adzuna, filters to your target titles and level, scores each job,
-and emails you the top 25 at raomahin@gmail.com.
+Every morning it checks company job feeds and Adzuna, keeps US commercial roles
+at Associate to Senior Manager level, scores them, and emails the top 25 to
+raomahin@gmail.com.
 
-## What is in this folder
+## What changed in version 2
+
+- US only. Non-US locations are dropped.
+- Priority cities: NY, Chicago, LA, SF, Houston, Dallas, Austin, Boston, Atlanta.
+  Remote and the rest of the US rank lower.
+- Two resumes. Each job says "Commercial resume" or "AI/Tech resume".
+- Policy track is off.
+- Visa column. Postings that say they will not sponsor are dropped.
+  Postings that say they sponsor get a boost. Companies in `sponsors.csv`
+  get a smaller boost. Most postings say nothing, so "Unknown" is normal.
+- New companies get a bonus. Companies you applied to recently get a penalty
+  and a warning.
+- At most 2 different roles per company per email. The same role in several cities counts once.
+- Titles added: Key Account Manager, Customer Business Manager, Vendor
+  Manager, Buyer, Account Executive, Revenue Growth Management.
+- 23 target companies get a bonus. Big employers that use Workday or their own
+  career sites are searched through Adzuna.
+
+## Files
 
 - `job_scraper.py`  the script
-- `config.py`  companies, title rules, locations, scoring. Edit this one.
-- `applied.csv`  jobs you already applied to, so they never show up again
+- `config.py`  companies, titles, cities, scoring. Edit this one.
+- `applied.csv`  companies and jobs you applied to (columns: company,title,url,date)
+- `sponsors.csv`  companies known to file H-1B petitions. A starter list from
+  general knowledge, not live data. Replace it with real data when you can.
+- `test_offline.py`  quick test with fake jobs
 - `.github/workflows/daily-jobs.yml`  the daily schedule
-- `test_offline.py`  quick test with fake jobs (no internet needed)
 
-## Setup (about 15 minutes)
+## applied.csv
 
-1. **Make a private GitHub repo** and upload everything in this folder,
-   including the hidden `.github` folder. Keep it private because
-   `applied.csv` is personal.
+One row per company is enough. Title, url and date are optional.
 
-2. **Get a Gmail app password.** Google Account > Security. Turn on
-   2-Step Verification, then search for "App passwords" and create one.
-   You get a 16 character password.
+    company,title,url,date
+    Block,,,
+    Stripe,Partnerships Manager,,2026-10-01
 
-3. **Add secrets.** In the repo: Settings > Secrets and variables > Actions
-   > New repository secret. Add:
-   - `GMAIL_USER`  raomahin@gmail.com
-   - `GMAIL_APP_PASSWORD`  the 16 character password
-   - `MAIL_TO`  raomahin@gmail.com (or another address)
+A date lets the script warn you when you applied less than 60 days ago.
 
-   Optional, but worth it:
-   - `ANTHROPIC_API_KEY`  turns on the AI fit score (1 to 10) and one-line
-     reason per job. This is a separate key from your Claude chat
-     subscription. Create it in the Anthropic Console. Cost is small
-     (about 40 short calls a day).
-   - `ADZUNA_APP_ID` and `ADZUNA_APP_KEY`  free keys from
-     developer.adzuna.com. This adds jobs from companies not on your list.
+## Secrets
 
-4. **Run it once by hand.** Actions tab > Daily job scan > Run workflow.
-   Check your inbox. The footer of the email lists any company slugs that
-   failed. Fix or delete those in `config.py`.
+Add these in GitHub: Settings > Secrets and variables > Actions.
 
-5. After that it runs every day at 12:00 UTC (7am Chicago in summer,
-   6am in winter).
+- `GMAIL_USER`, `GMAIL_APP_PASSWORD`, `MAIL_TO` (already done)
+- `ADZUNA_APP_ID` and `ADZUNA_APP_KEY`: register free at developer.adzuna.com
+- `ANTHROPIC_API_KEY`: from console.anthropic.com, turns on the 1 to 10 fit score
 
-## Daily use
+Never paste keys into chats or emails.
 
-- Add companies to `GREENHOUSE`, `LEVER` or `ASHBY` in `config.py`. The slug
-  is the last part of their careers URL, for example
-  `jobs.ashbyhq.com/elevenlabs` gives `elevenlabs`.
-- Add jobs you applied to in `applied.csv` (company,title,url).
-- If you get too many or too few jobs, change `MIN_SCORE` and `MAX_AGE_HOURS`.
-- If a type of job keeps showing up that you do not want, add a word to
-  `EXCLUDE_TITLE` or `NEGATIVE_KEYWORDS`.
+## Limits
 
-## Test on your own computer
-
-    pip install -r requirements.txt
-    python test_offline.py
-    python job_scraper.py --dry-run
-
-The dry run fetches real jobs and writes `preview.html`. It does not send
-email or change any saved state.
-
-## What it does not do
-
-- It does not scrape LinkedIn or Indeed. Those block bots and can ban your
-  account. If you want LinkedIn jobs, set up LinkedIn job alerts, they email
-  you directly.
+- First run after an update shows jobs from the last 14 days, so you see the backlog. After that each job is emailed once.
+- Companies on Workday or their own sites (Google, Amazon, Walmart and others)
+  only come through Adzuna. Without Adzuna keys you only see tech companies.
+- The visa column is a hint, not a promise. A company on the sponsor list may
+  still not sponsor this role.
+- It does not scrape LinkedIn or Indeed.
 - It does not apply for you.

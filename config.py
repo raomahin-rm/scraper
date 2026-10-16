@@ -1,47 +1,72 @@
 """Everything you might want to change lives in this file."""
 
 # ---------------------------------------------------------------------------
-# 1. Companies to watch (free, official job feeds)
+# 1. Companies read directly from their official job feeds (free)
 # ---------------------------------------------------------------------------
 # The slug is the last part of the company's careers URL:
-#   boards.greenhouse.io/<slug>    jobs.lever.co/<slug>    jobs.ashbyhq.com/<slug>
-# Some slugs below are best guesses. Any that fail are listed at the bottom
+#   boards.greenhouse.io/<slug>   jobs.lever.co/<slug>   jobs.ashbyhq.com/<slug>
+# Many slugs below are best guesses. Any that fail are listed at the bottom
 # of the daily email so you can fix or delete them.
 GREENHOUSE = [
-    "block", "gusto", "airwallex", "lyft", "instacart",
-    "stripe", "brex", "samsara", "flexport",
+    "stripe", "instacart", "affirm", "okta", "doordashusa", "via",
+    "lyft", "brex", "gusto", "airwallex", "block", "samsara", "flexport",
+    "databricks", "scaleai", "faire", "twilio", "datadog", "hubspot", "wayfair",
 ]
-LEVER = ["wellhub"]
-ASHBY = ["elevenlabs", "ramp", "openai"]
+LEVER = ["plaid"]
+ASHBY = ["elevenlabs", "ramp", "openai", "perplexity-ai", "cohere"]
 
 # ---------------------------------------------------------------------------
-# 2. Aggregator search (Adzuna). Needs free keys, skipped if not set.
+# 2. Your target companies. Jobs here get a bonus. Names are matched as
+#    whole words. Use "|" for alternate names.
+# ---------------------------------------------------------------------------
+TARGET_COMPANIES = [
+    "Uber", "DoorDash", "Salesforce", "Stripe", "Amazon", "Google", "SAP",
+    "Deloitte", "EY|Ernst & Young", "P&G|Procter & Gamble", "Coca-Cola|Coca Cola",
+    "Walmart", "Target", "Via", "Okta", "Carvana", "Affirm", "Fidelity",
+    "Instacart", "LinkedIn", "NVIDIA", "PayPal", "Mastercard",
+]
+
+# Companies whose jobs should use your AI/Tech resume.
+AI_COMPANIES = [
+    "OpenAI", "Anthropic", "ElevenLabs", "Databricks", "Scale AI", "Glean",
+    "Perplexity", "Cohere", "NVIDIA", "Mistral", "Hugging Face", "Runway",
+    "Harvey", "Sierra", "Decagon", "Anysphere", "Cursor", "Writer",
+]
+
+# ---------------------------------------------------------------------------
+# 3. Adzuna search (needs free keys, skipped if not set).
+#    This is how big employers on Workday or their own sites get covered.
+#    Keep total searches under about 70 a day.
 # ---------------------------------------------------------------------------
 ADZUNA_QUERIES = [
     "partnerships manager",
     "business development manager",
     "strategic account manager",
+    "key account manager",
     "category manager",
     "revenue growth management",
-    "supplier manager marketplace",
+    "vendor manager",
     "commercial strategy manager",
-    "policy manager",
 ]
-ADZUNA_LOCATIONS = ["Chicago", "New York", "Los Angeles", "San Francisco"]
+ADZUNA_LOCATIONS = ["", "Chicago", "New York", "San Francisco", "Los Angeles"]  # "" = all US
+
+# One search per company, for employers you cannot read directly.
+ADZUNA_COMPANIES = [
+    "Uber", "DoorDash", "Salesforce", "Amazon", "Google", "SAP", "Deloitte",
+    "EY", "Procter & Gamble", "Coca-Cola", "Walmart", "Target", "Carvana",
+    "Fidelity", "LinkedIn", "NVIDIA", "PayPal", "Mastercard", "Unilever",
+    "Colgate-Palmolive", "Reckitt", "PepsiCo", "Mondelez", "Kimberly-Clark",
+]
+ADZUNA_COMPANY_WORDS = (
+    "partnership partnerships business development account category vendor "
+    "channel revenue strategy"
+)
 
 # ---------------------------------------------------------------------------
-# 3. Which job titles count
+# 4. Which job titles count (policy track is off for now)
 # ---------------------------------------------------------------------------
 # Checked in this order. The first track that matches the title wins.
 TRACKS = {
-    "policy": {
-        "label": "Policy",
-        "weight": 28,
-        "patterns": [
-            r"\bpolicy\b", r"public affairs", r"government (affairs|relations)",
-            r"regulatory", r"public sector",
-        ],
-    },
     "partnerships": {
         "label": "Partnerships / BD",
         "weight": 40,
@@ -57,8 +82,9 @@ TRACKS = {
             r"category (manager|management|lead|analyst|strategy)",
             r"revenue growth", r"\brgm\b",
             r"commercial (strategy|finance)", r"trade strategy",
-            r"supplier", r"vendor manager", r"marketplace",
-            r"market research",
+            r"supplier", r"vendor manager",
+            r"marketplace (manager|lead|operations|strategy)",
+            r"market research", r"\bbuyer\b",
         ],
     },
     "accounts": {
@@ -66,35 +92,47 @@ TRACKS = {
         "weight": 35,
         "patterns": [
             r"account manage", r"key account", r"strategic account",
+            r"national account", r"account executive", r"customer business",
         ],
     },
 }
 
-# Titles containing any of these are dropped. Level target is Manager or
-# Senior Associate, so Director and above are out. Field sales is out.
+# Titles containing any of these are dropped.
+# Director and above are out. Entry-level and field sales are out.
 EXCLUDE_TITLE = [
     r"director", r"\bvp\b", r"vice president", r"head of", r"chief",
     r"\bpresident\b", r"\bintern", r"junior", r"\bjr\b", r"entry.level",
-    r"sales development", r"\bsdr\b", r"\bbdr\b", r"representative",
+    r"sales development", r"\bsdr\b", r"\bbdr\b", r"representative", r"\brep\b",
     r"territory", r"district", r"account developer",
     r"engineer", r"developer", r"software", r"technical", r"data scientist",
     r"recruit", r"talent", r"designer", r"counsel", r"attorney",
     r"accountant", r"human resources", r"people partner", r"business partner",
+    r"finance partner", r"strategic finance",
     r"coordinator", r"assistant", r"administrator",
 ]
 
 # ---------------------------------------------------------------------------
-# 4. Locations
+# 5. Locations (US only)
 # ---------------------------------------------------------------------------
-PREFERRED_LOCATIONS = [
-    "chicago", "new york", "nyc", "brooklyn", "los angeles",
-    "san francisco", "bay area", "palo alto", "oakland", "remote",
+US_ONLY = True
+# Priority cities. A match gets the top location score.
+TIER1_CITIES = [
+    "new york", "nyc", "brooklyn", "manhattan",
+    "chicago",
+    "los angeles", "santa monica", "san francisco", "bay area", "palo alto",
+    "oakland", "san jose", "mountain view", "sunnyvale", "menlo park",
+    "redwood city",
+    "houston", "dallas", "austin", "texas",
+    "boston", "massachusetts",
+    "atlanta",
 ]
+LOC_POINTS_TIER1 = 15
+LOC_POINTS_REMOTE = 9    # remote in the US
+LOC_POINTS_OTHER_US = 5  # any other US city
 
 # ---------------------------------------------------------------------------
-# 5. Scoring
+# 6. Scoring
 # ---------------------------------------------------------------------------
-# Words in the job description that add 2 points each (max 24 total).
 POSITIVE_KEYWORDS = [
     "partnership", "channel", "reseller", "marketplace", "saas", "p&l",
     "key account", "strategic account", "enterprise", "category management",
@@ -103,42 +141,57 @@ POSITIVE_KEYWORDS = [
     "pricing", "forecast", "go-to-market", "gtm", "amazon", "wholesale",
     "b2b", "fintech", "payments", "emerging markets", "artificial intelligence",
 ]
-# Words that subtract 8 points each (max 24 total).
 NEGATIVE_KEYWORDS = [
     "territory", "field sales", "merchandis", "store visits", "cold calling",
     "door-to-door", "commission only", "security clearance",
 ]
 
-MAX_AGE_HOURS = 48     # only jobs posted in the last N hours
-MIN_SCORE = 40         # rule score needed to be considered at all
-TOP_N = 25             # jobs in the daily email
-LLM_POOL = 40          # how many top rule-scored jobs get an LLM review
-MIN_FIT = 5            # LLM fit score (1 to 10) below this is dropped
+TARGET_COMPANY_BONUS = 8     # company is on your target list
+NEW_COMPANY_BONUS = 8        # you have not applied there before
+ATS_BONUS = 6                # read directly from the company's own job feed
+COMPANY_COOLDOWN_DAYS = 60   # recent application = penalty and a warning flag
+MAX_PER_COMPANY = 2          # most roles from one company in one email
+
+# Visa sponsorship signals. Many postings say nothing, so "unknown" stays in.
+DROP_NO_SPONSORSHIP = True   # drop postings that say they will not sponsor
+SAYS_SPONSORS_BONUS = 15
+ON_SPONSOR_LIST_BONUS = 10   # company is in sponsors.csv
+
+MAX_AGE_HOURS = 336           # 14 days. Each job is only emailed once.
+ADZUNA_MAX_DAYS = 14
+FRESH_24H_BONUS = 10         # newer postings rank higher
+FRESH_72H_BONUS = 5
+DEBUG_COMPANIES = ["Lyft"]  # prints what happened to these companies in the run log
+MIN_SCORE = 50
+TOP_N = 25
+LLM_POOL = 40
+MIN_FIT = 5
 LLM_MODEL = "claude-haiku-5-5"
 
-# Short summary sent to the LLM so it can judge fit. Edit freely.
 PROFILE_SUMMARY = """
-Mahin Rao. Based in Chicago, open to NY, LA, SF and relocation.
+Mahin Rao. Based in Chicago. US job search, open to relocation and remote.
 10+ years of commercial experience across FMCG, enterprise SaaS, e-commerce
 and B2B partnerships in Pakistan and MENAP.
 - Retailo Technologies: Senior Category Manager and Senior BD Manager.
-  Launched a BNPL product, managed supplier joint business plans, sold SaaS,
-  built a $2M+ pipeline.
+  Launched a BNPL product, managed supplier joint business plans with 125+
+  partners, sold a patented SaaS platform, built a $2M+ pipeline.
 - Leverify LLC: Partnership Manager, North America. Owned supplier
   relationships, buying, margins, credit terms, forecasting and Amazon FBA
-  inventory for an electronics wholesale distributor (about $4M a year
-  with one supplier). Managed a team.
+  inventory for an electronics wholesale distributor (about $4M a year with
+  one supplier). Managed a team.
 - Packages Limited: B2B account owner for a $7.9M portfolio selling packaging
-  to Unilever, Colgate and Reckitt.
-- Hilal Foods: built an institutional sales channel from zero.
+  to Unilever, Colgate and Reckitt. Won back $3.6M of Colgate volume.
+- Hilal Foods: built an institutional B2B sales channel from zero.
 - Strengths: quota-carrying sales, strategic and enterprise account
-  management (10 years, 8 at enterprise level), partner channels (SI,
-  affiliate, reseller), negotiating $2M+ deals with Director and Head level
-  stakeholders, category management, P&L ownership. Managed 3 to 4 reports.
+  management, partner channels (SI, affiliate, reseller), negotiating $2M+
+  deals with Director and Head level stakeholders, category management, P&L
+  ownership. Managed 3 to 4 reports.
 - Education: MA Public Policy (Harris, UChicago), MBA (IBA Karachi),
   BBA (NUCES). Also AI governance and TA work at Chicago Booth.
 - Has NOT run a field retail sales territory.
-Target level: Manager or Senior Associate, not Director.
-Target order: 1) startups, tech, last-mile, ride-hailing; 2) commercial
-BD, sales, partnerships, category management; 3) policy.
+- Has little US employer history, so one level below his experience is fine.
+Targets: commercial roles (partnerships, BD, account management, category
+management, revenue growth management, vendor management) at CPG, retail,
+e-commerce, marketplace, fintech, SaaS, and AI companies. Level: Associate to
+Senior Manager. Not Director. Not policy roles.
 """.strip()

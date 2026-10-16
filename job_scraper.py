@@ -15,8 +15,8 @@ import smtplib
 import ssl
 import sys
 import time
-from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from dataclasses import dataclass, field
+from datetime import date, datetime, timedelta, timezone
 from email.message import EmailMessage
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -28,9 +28,12 @@ import config
 ROOT = Path(__file__).parent
 SEEN_FILE = ROOT / "seen_jobs.json"
 APPLIED_FILE = ROOT / "applied.csv"
+SPONSORS_FILE = ROOT / "sponsors.csv"
 HEADERS = {"User-Agent": "personal-job-scraper/1.0 (personal use)"}
 TIMEOUT = 25
 NOW = datetime.now(timezone.utc)
+METRICS = {"adzuna_calls": 0, "adzuna_jobs": 0}
+ATS_SOURCES = ("greenhouse", "lever", "ashby")
 
 
 # ---------------------------------------------------------------------------
@@ -49,10 +52,13 @@ class Job:
     track: str = ""
     score: float = 0.0
     resume: str = ""
+    visa: str = ""  # "yes", "listed" or ""
+    tags: list = field(default_factory=list)
     fit: int | None = None
     reason: str = ""
     flags: str = ""
     final: float = 0.0
+    dropped: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -83,6 +89,17 @@ def get_json(url, params=None):
     r = requests.get(url, params=params, headers=HEADERS, timeout=TIMEOUT)
     r.raise_for_status()
     return r.json()
+
+
+def name_match(names, text):
+    """True if any name (aliases split by '|') appears as a whole word in text."""
+    t = (text or "").lower()
+    for entry in names:
+        for alias in str(entry).split("|"):
+            a = alias.strip().lower()
+            if a and re.search(r"(?<![a-z0-9])" + re.escape(a) + r"(?![a-z0-9])", t):
+                return True
+    return False
 
 
 # ---------------------------------------------------------------------------
@@ -148,39 +165,49 @@ def fetch_ashby(slug):
         )
 
 
-def fetch_adzuna():
+def _adzuna_search(params):
     app_id = os.getenv("ADZUNA_APP_ID")
     app_key = os.getenv("ADZUNA_APP_KEY")
-    if not (app_id and app_key):
+    base = {
+        "app_id": app_id,
+        "app_key": app_key,
+        "results_per_page": 50,
+        "max_days_old": config.ADZUNA_MAX_DAYS,
+        "sort_by": "date",
+        "content-type": "application/json",
+    }
+    base.update(params)
+    METRICS["adzuna_calls"] += 1
+    data = get_json("https://api.adzuna.com/v1/api/jobs/us/search/1", base)
+    for j in data.get("results", []):
+        METRICS["adzuna_jobs"] += 1
+        yield Job(
+            source="adzuna",
+            uid=f"az:{j['id']}",
+            company=(j.get("company") or {}).get("display_name", ""),
+            title=j.get("title", ""),
+            location=(j.get("location") or {}).get("display_name", ""),
+            url=j.get("redirect_url", ""),
+            posted=parse_iso(j.get("created")),
+            description=clean(j.get("description")),
+        )
+    time.sleep(0.4)
+
+
+def fetch_adzuna():
+    if not (os.getenv("ADZUNA_APP_ID") and os.getenv("ADZUNA_APP_KEY")):
         print("adzuna: no keys set, skipping")
         return
     for query in config.ADZUNA_QUERIES:
         for where in config.ADZUNA_LOCATIONS:
-            data = get_json(
-                "https://api.adzuna.com/v1/api/jobs/us/search/1",
-                {
-                    "app_id": app_id,
-                    "app_key": app_key,
-                    "what": query,
-                    "where": where,
-                    "results_per_page": 30,
-                    "max_days_old": 2,
-                    "sort_by": "date",
-                    "content-type": "application/json",
-                },
-            )
-            for j in data.get("results", []):
-                yield Job(
-                    source="adzuna",
-                    uid=f"az:{j['id']}",
-                    company=(j.get("company") or {}).get("display_name", ""),
-                    title=j.get("title", ""),
-                    location=(j.get("location") or {}).get("display_name", ""),
-                    url=j.get("redirect_url", ""),
-                    posted=parse_iso(j.get("created")),
-                    description=clean(j.get("description")),
-                )
-            time.sleep(0.4)
+            params = {"what": query}
+            if where:
+                params["where"] = where
+            yield from _adzuna_search(params)
+    for company in config.ADZUNA_COMPANIES:
+        yield from _adzuna_search(
+            {"what_or": config.ADZUNA_COMPANY_WORDS, "company": company}
+        )
 
 
 def fetch_all():
@@ -201,7 +228,7 @@ def fetch_all():
         time.sleep(0.3)
     try:
         got = list(fetch_adzuna())
-        print(f"adzuna: {len(got)} jobs")
+        print(f"adzuna: {len(got)} jobs from {METRICS['adzuna_calls']} searches")
         jobs += got
     except Exception as e:
         errors.append(f"adzuna: {e}")
@@ -210,7 +237,7 @@ def fetch_all():
 
 
 # ---------------------------------------------------------------------------
-# Filtering and scoring
+# Titles, locations, visa signals
 # ---------------------------------------------------------------------------
 def track_for(title):
     t = title.lower()
@@ -225,27 +252,160 @@ def title_blocked(title):
     return any(re.search(p, t) for p in config.EXCLUDE_TITLE)
 
 
-def location_points(loc):
+_STATES = (
+    "AL AK AZ AR CA CO CT DE FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO "
+    "MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY DC"
+).split()
+STATE_RE = re.compile(r"(?:,\s*|\()(" + "|".join(_STATES) + r")\b")
+US_RE = re.compile(r"\b(united states|usa|u\.s\.a?\.?|us|america)\b", re.I)
+NON_US_RE = re.compile(
+    r"\b(london|uk|united kingdom|england|scotland|wales|ireland|dublin|germany|"
+    r"berlin|munich|hamburg|frankfurt|france|paris|netherlands|amsterdam|spain|"
+    r"madrid|barcelona|italy|milan|rome|sweden|stockholm|poland|warsaw|krakow|"
+    r"switzerland|zurich|geneva|denmark|copenhagen|norway|oslo|finland|helsinki|"
+    r"portugal|lisbon|belgium|brussels|austria|vienna|czech|prague|hungary|"
+    r"budapest|romania|bucharest|greece|athens|cyprus|"
+    r"india|bangalore|bengaluru|mumbai|delhi|new delhi|gurgaon|gurugram|noida|"
+    r"hyderabad|pune|chennai|kolkata|ahmedabad|"
+    r"singapore|japan|tokyo|osaka|korea|seoul|china|shanghai|beijing|shenzhen|"
+    r"guangzhou|hong kong|taiwan|taipei|"
+    r"australia|sydney|melbourne|brisbane|new zealand|auckland|"
+    r"canada|toronto|vancouver|montreal|ottawa|calgary|"
+    r"mexico|mexico city|brazil|sao paulo|argentina|buenos aires|colombia|bogota|"
+    r"chile|santiago|peru|lima|"
+    r"uae|dubai|abu dhabi|saudi|riyadh|qatar|doha|egypt|cairo|israel|tel aviv|"
+    r"pakistan|lahore|karachi|islamabad|bangladesh|dhaka|"
+    r"emea|apac|latam|europe|asia|"
+    r"nigeria|lagos|kenya|nairobi|south africa|cape town|ghana|"
+    r"philippines|manila|indonesia|jakarta|vietnam|thailand|bangkok|malaysia|"
+    r"kuala lumpur|turkey|istanbul)\b",
+    re.I,
+)
+
+
+def location_info(loc):
+    """Return (kind, points). kind is tier1, us, remote, unknown or non_us."""
+    loc = loc or ""
     l = loc.lower()
-    if re.search(r"\b(emea|apac|latam|uk|united kingdom|india|germany|singapore)\b", l):
-        return 0
-    for place in config.PREFERRED_LOCATIONS:
-        if place in l:
-            return 10 if place == "remote" else 15
+    if any(c in l for c in config.TIER1_CITIES) or re.search(r",\s*(TX|MA)\b", loc):
+        return "tier1", config.LOC_POINTS_TIER1
+    if US_RE.search(loc) or STATE_RE.search(loc):
+        return "us", (config.LOC_POINTS_REMOTE if "remote" in l else config.LOC_POINTS_OTHER_US)
+    if NON_US_RE.search(l):
+        return "non_us", 0
+    if "remote" in l:
+        return "remote", config.LOC_POINTS_REMOTE
+    return "unknown", 0
+
+
+NO_SPONSOR = [
+    r"(will|does|do|can|could|is|are|would) not (be able to )?(provide |offer |support )?(visa |employment )?sponsor",
+    r"(unable|not able) to (provide |offer )?(visa |employment )?sponsor",
+    r"cannot (provide |offer )?(visa |employment )?sponsor",
+    r"can.t (provide |offer )?(visa |employment )?sponsor",
+    r"\bno (visa |employment )?sponsorship",
+    r"without (the need for )?(current or future )?(visa |employer |employment )?sponsorship",
+    r"not (require|need|requiring) (visa |employer |employment )?sponsorship",
+    r"sponsorship (is |are )?not (available|offered|provided)",
+    r"not (eligible|available) for (visa |employment )?sponsorship",
+]
+YES_SPONSOR = [
+    r"(visa |employment )?sponsorship (is |are )?(available|provided|offered)",
+    r"we (will |do |can )?(offer |provide )?(visa |employment )?sponsor",
+    r"(?<![a-z])(?<!not )(will|can|able to) (provide )?(visa )?sponsor",
+    r"h-?1b (sponsorship|transfer)",
+    r"(open|willing) to (visa )?sponsor",
+]
+
+
+def sponsor_signal(text):
+    """Return 'no', 'yes' or '' based on what the posting says."""
+    t = (text or "").lower()
+    neg = any(re.search(p, t) for p in NO_SPONSOR)
+    pos = any(re.search(p, t) for p in YES_SPONSOR)
+    if neg and not pos:
+        return "no"
+    if pos and not neg:
+        return "yes"
+    return ""
+
+
+def load_sponsors():
+    names = []
+    if SPONSORS_FILE.exists():
+        with open(SPONSORS_FILE, newline="", encoding="utf-8") as f:
+            for row in csv.DictReader(f):
+                if row.get("company"):
+                    names.append(row["company"].strip())
+    return names
+
+
+# ---------------------------------------------------------------------------
+# Scoring
+# ---------------------------------------------------------------------------
+def level_points(title):
+    t = title.lower()
+    if re.search(r"\b(senior|sr\.?|lead|manager)\b", t):
+        return 10
+    if re.search(r"\b(associate|specialist)\b", t):
+        return 3
     return 0
 
 
-def rule_score(job):
+def pick_resume(job):
+    d = job.description.lower()
+    ai_hits = len(re.findall(
+        r"\b(artificial intelligence|machine learning|llm|llms|generative ai|genai|foundation models?)\b", d))
+    if name_match(config.AI_COMPANIES, job.company) or ai_hits >= 4:
+        return "AI/Tech resume"
+    return "Commercial resume"
+
+
+def applied_info(company, companies):
+    """Return (found, latest_date_or_None) for a company in applied.csv."""
+    found, latest = False, None
+    for name, d in companies.items():
+        if name_match([name], company):
+            found = True
+            if d and (latest is None or d > latest):
+                latest = d
+    return found, latest
+
+
+def rule_score(job, companies, sponsors):
     t = job.title.lower()
     d = job.description.lower()
     flags = []
 
     s = config.TRACKS[job.track]["weight"]
-    if re.search(r"\b(senior|sr\.?|lead|manager)\b", t):
-        s += 10
-    s += location_points(job.location)
-    if job.source in ("greenhouse", "lever", "ashby"):
-        s += 10  # on your company watchlist
+    s += level_points(job.title)
+    s += location_info(job.location)[1]
+
+    if job.posted:
+        hrs = (NOW - job.posted).total_seconds() / 3600
+        if hrs <= 24:
+            s += config.FRESH_24H_BONUS
+        elif hrs <= 72:
+            s += config.FRESH_72H_BONUS
+
+    if job.source in ATS_SOURCES:
+        s += config.ATS_BONUS
+    if name_match(config.TARGET_COMPANIES, job.company):
+        s += config.TARGET_COMPANY_BONUS
+        job.tags.append("Target")
+
+    found, latest = applied_info(job.company, companies)
+    if not found:
+        s += config.NEW_COMPANY_BONUS
+        job.tags.append("New")
+    elif latest is None:
+        s -= 6
+        flags.append("applied here before")
+    else:
+        age = (NOW.date() - latest).days
+        if age <= config.COMPANY_COOLDOWN_DAYS:
+            s -= 12
+            flags.append(f"applied here {age}d ago")
 
     hits = sum(1 for k in config.POSITIVE_KEYWORDS if re.search(r"\b" + re.escape(k), d))
     s += min(24, 2 * hits)
@@ -261,56 +421,66 @@ def rule_score(job):
         if top >= 12:
             s -= 10
             flags.append(f"asks {top}+ yrs")
-        elif top <= 3:
-            s -= 15
-            flags.append("looks junior")
+        elif top <= 2:
+            s -= 8
+            flags.append("very junior ask")
+
+    sig = sponsor_signal(job.description)
+    if sig == "yes":
+        job.visa = "yes"
+        s += config.SAYS_SPONSORS_BONUS
+    elif name_match(sponsors, job.company):
+        job.visa = "listed"
+        s += config.ON_SPONSOR_LIST_BONUS
 
     job.score = s
     job.flags = "; ".join(flags)
     job.resume = pick_resume(job)
 
 
-def pick_resume(job):
-    if job.track == "policy":
-        return "Policy"
-    d = job.description.lower()
-    tech = re.search(
-        r"\b(saas|artificial intelligence|machine learning|startup|marketplace|fintech|platform)\b", d
-    )
-    if job.source in ("greenhouse", "lever", "ashby") or tech:
-        return "Tech/AI"
-    return "Base"
-
-
-def shortlist(jobs, seen, applied):
+def shortlist(jobs, seen, applied, sponsors=None):
+    exact, companies = applied
+    sponsors = sponsors or []
     cutoff = NOW - timedelta(hours=config.MAX_AGE_HOURS)
-    stats = dict(fetched=len(jobs), stale=0, title=0, seen=0, applied=0, dupe=0, low=0)
+    stats = dict(fetched=len(jobs), stale=0, title=0, seen=0, applied=0,
+                 non_us=0, no_sponsor=0, dupe=0, low=0)
     out, keys = [], set()
+
+    def drop(j, key, label):
+        stats[key] += 1
+        j.dropped = label
+
     for j in jobs:
         if not j.url or not j.title:
             continue
         if j.posted and j.posted < cutoff:
-            stats["stale"] += 1
+            drop(j, "stale", "too old")
             continue
         track = track_for(j.title)
         if not track or title_blocked(j.title):
-            stats["title"] += 1
+            drop(j, "title", "title or level not a match")
             continue
         if j.uid in seen:
-            stats["seen"] += 1
+            drop(j, "seen", "already emailed before")
             continue
-        if (norm(j.company), norm(j.title)) in applied or j.url in applied:
-            stats["applied"] += 1
+        if (norm(j.company), norm(j.title)) in exact or j.url in exact:
+            drop(j, "applied", "already applied")
+            continue
+        if config.US_ONLY and location_info(j.location)[0] == "non_us":
+            drop(j, "non_us", "outside the US")
+            continue
+        if config.DROP_NO_SPONSORSHIP and sponsor_signal(j.description) == "no":
+            drop(j, "no_sponsor", "says no sponsorship")
             continue
         key = (norm(j.company), norm(j.title), norm(j.location))
         if key in keys:
-            stats["dupe"] += 1
+            drop(j, "dupe", "duplicate")
             continue
         keys.add(key)
         j.track = track
-        rule_score(j)
+        rule_score(j, companies, sponsors)
         if j.score < config.MIN_SCORE:
-            stats["low"] += 1
+            drop(j, "low", f"score {round(j.score)} below {config.MIN_SCORE}")
             continue
         out.append(j)
     out.sort(key=lambda x: x.score, reverse=True)
@@ -326,7 +496,8 @@ def llm_review(job):
         return
     prompt = (
         "You are a blunt recruiter judging job fit. Be strict. Most jobs "
-        "should score between 4 and 7. Only give 9 or 10 for a near-perfect match.\n\n"
+        "should score between 4 and 7. Only give 9 or 10 for a near-perfect match. "
+        "Judge skills, level and industry fit only.\n\n"
         f"CANDIDATE:\n{config.PROFILE_SUMMARY}\n\n"
         f"JOB:\nCompany: {job.company}\nTitle: {job.title}\n"
         f"Location: {job.location}\nDescription:\n{job.description[:6000]}\n\n"
@@ -368,27 +539,51 @@ def llm_review(job):
             return
 
 
+def cap_per_company(jobs):
+    """At most MAX_PER_COMPANY different roles per company.
+
+    The same role posted in several cities counts once, so you see every city.
+    """
+    titles, out = {}, []
+    for j in jobs:
+        seen_titles = titles.setdefault(norm(j.company), [])
+        t = norm(j.title)
+        if t in seen_titles or len(seen_titles) < config.MAX_PER_COMPANY:
+            if t not in seen_titles:
+                seen_titles.append(t)
+            out.append(j)
+    return out
+
+
 def rank(pool):
-    """Review the top of the pool with the LLM (if a key is set) and rank."""
-    pool = pool[: config.LLM_POOL]
+    """Review the top of the pool with the LLM (if a key is set) and rank.
+
+    Returns (top, rejected). Only emailed and rejected jobs are marked as seen,
+    so anything that missed the cut can show up again tomorrow.
+    """
+    pool = cap_per_company(pool)[: config.LLM_POOL]
     if not os.getenv("ANTHROPIC_API_KEY"):
         for j in pool:
             j.final = j.score
-        return pool[: config.TOP_N], pool
+        return pool[: config.TOP_N], []
     for j in pool:
         llm_review(j)
         time.sleep(0.3)
+    rejected = [j for j in pool if j.fit is not None and j.fit < config.MIN_FIT]
     kept = [j for j in pool if j.fit is None or j.fit >= config.MIN_FIT]
+    for j in rejected:
+        j.dropped = f"AI fit {j.fit}/10"
     for j in kept:
         j.final = j.score + (j.fit or 5) * 8
     kept.sort(key=lambda x: x.final, reverse=True)
-    return kept[: config.TOP_N], pool
+    return cap_per_company(kept)[: config.TOP_N], rejected
 
 
 # ---------------------------------------------------------------------------
 # Email
 # ---------------------------------------------------------------------------
 TRACK_LABEL = {k: v["label"] for k, v in config.TRACKS.items()}
+VISA_LABEL = {"yes": "Says it sponsors", "listed": "On sponsor list", "": "Unknown"}
 
 
 def age_text(j):
@@ -406,29 +601,41 @@ def build_email(top, stats, errors):
         note = esc(j.reason)
         if j.flags:
             note += f'<br><span style="color:#b45309">{esc(j.flags)}</span>'
+        badges = "".join(
+            f' <span style="background:#e0f2fe;border-radius:3px;padding:0 4px;'
+            f'font-size:11px">{esc(t)}</span>'
+            for t in j.tags
+        )
         rows.append(
             "<tr>"
             f"<td>{i}</td><td>{fit}</td>"
             f'<td><a href="{esc(j.url)}">{esc(j.title)}</a><br>'
-            f'<span style="color:#555">{esc(j.company)}</span></td>'
+            f'<span style="color:#555">{esc(j.company)}</span>{badges}</td>'
             f"<td>{esc(j.location)[:40]}</td>"
             f"<td>{esc(TRACK_LABEL.get(j.track, j.track))}</td>"
-            f"<td>{esc(j.resume)}</td><td>{age_text(j)}</td><td>{note}</td>"
+            f"<td>{esc(j.resume)}</td><td>{esc(VISA_LABEL.get(j.visa, ''))}</td>"
+            f"<td>{age_text(j)}</td><td>{note}</td>"
             "</tr>"
         )
     table = (
         '<table cellpadding="6" cellspacing="0" border="1" '
         'style="border-collapse:collapse;border-color:#ddd;font-size:13px">'
         "<tr style='background:#f3f4f6'><th>#</th><th>Fit</th><th>Role</th>"
-        "<th>Where</th><th>Track</th><th>Resume</th><th>Age</th><th>Notes</th></tr>"
+        "<th>Where</th><th>Track</th><th>Resume</th><th>Visa</th><th>Age</th>"
+        "<th>Notes</th></tr>"
         + "".join(rows)
         + "</table>"
     )
     footer = (
         f"<p style='color:#666;font-size:12px'>Scanned {stats['fetched']} jobs. "
         f"Dropped: {stats['stale']} old, {stats['title']} wrong title or level, "
+        f"{stats['non_us']} outside the US, {stats['no_sponsor']} saying no sponsorship, "
         f"{stats['seen']} already sent, {stats['applied']} already applied, "
-        f"{stats['dupe']} duplicates, {stats['low']} low score.</p>"
+        f"{stats['dupe']} duplicates, {stats['low']} low score. "
+        f"Adzuna: {METRICS['adzuna_calls']} searches, {METRICS['adzuna_jobs']} jobs.</p>"
+        "<p style='color:#666;font-size:12px'>Visa column: most postings say nothing, "
+        "so Unknown is normal. \"On sponsor list\" only means the company has filed "
+        "H-1B petitions before, not that it will sponsor this role. Always check.</p>"
     )
     if errors:
         footer += (
@@ -453,13 +660,14 @@ def build_email(top, stats, errors):
 def build_csv(jobs):
     buf = io.StringIO()
     w = csv.writer(buf)
-    w.writerow(["final", "fit", "track", "resume", "company", "title",
-                "location", "posted", "url", "reason", "flags"])
+    w.writerow(["final", "fit", "track", "resume", "visa", "tags", "company",
+                "title", "location", "posted", "url", "reason", "flags"])
     for j in jobs:
         w.writerow([
             round(j.final, 1), j.fit or "", TRACK_LABEL.get(j.track, j.track),
-            j.resume, j.company, j.title, j.location,
-            j.posted.isoformat() if j.posted else "", j.url, j.reason, j.flags,
+            j.resume, VISA_LABEL.get(j.visa, ""), " ".join(j.tags), j.company,
+            j.title, j.location, j.posted.isoformat() if j.posted else "",
+            j.url, j.reason, j.flags,
         ])
     return buf.getvalue().encode("utf-8")
 
@@ -499,32 +707,67 @@ def save_seen(seen):
 
 
 def load_applied():
-    """applied.csv columns: company,title,url (title and url are optional)."""
-    out = set()
+    """applied.csv columns: company,title,url,date (only company is required).
+
+    A row with just a company means "I have applied there". Add a date
+    (YYYY-MM-DD) to get a warning for recent applications.
+    Returns (exact, companies): exact job matches and a company -> date map.
+    """
+    exact, companies = set(), {}
     if APPLIED_FILE.exists():
         with open(APPLIED_FILE, newline="", encoding="utf-8") as f:
             for row in csv.DictReader(f):
-                if row.get("url"):
-                    out.add(row["url"].strip())
-                if row.get("company") and row.get("title"):
-                    out.add((norm(row["company"]), norm(row["title"])))
-    return out
+                company = (row.get("company") or "").strip()
+                title = (row.get("title") or "").strip()
+                url = (row.get("url") or "").strip()
+                if url:
+                    exact.add(url)
+                if company and title:
+                    exact.add((norm(company), norm(title)))
+                if company:
+                    d = None
+                    try:
+                        d = datetime.strptime((row.get("date") or "").strip(), "%Y-%m-%d").date()
+                    except ValueError:
+                        pass
+                    prev = companies.get(company)
+                    companies[company] = max(d, prev) if (d and prev) else (d or prev)
+    return exact, companies
 
 
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
-def run(jobs, errors, seen, applied):
-    pool, stats = shortlist(jobs, seen, applied)
-    top, reviewed = rank(pool)
-    return top, reviewed, stats
+def run(jobs, errors, seen, applied, sponsors=None):
+    pool, stats = shortlist(jobs, seen, applied, sponsors)
+    top, rejected = rank(pool)
+    return top, rejected, stats
+
+
+def print_debug(jobs, top):
+    """Show what happened to jobs from DEBUG_COMPANIES in the run log."""
+    names = config.DEBUG_COMPANIES
+    if not names:
+        return
+    emailed = {id(j) for j in top}
+    print("--- debug: jobs from DEBUG_COMPANIES ---")
+    found = False
+    for j in jobs:
+        if name_match(names, j.company):
+            found = True
+            status = "EMAILED" if id(j) in emailed else (
+                j.dropped or "passed filters, not in top list")
+            print(f"{j.company} | {j.title} | {j.location} | {age_text(j)} | {status}")
+    if not found:
+        print("none fetched (check the slug in config.py)")
 
 
 def main():
     dry = "--dry-run" in sys.argv
-    seen, applied = load_seen(), load_applied()
+    seen, applied, sponsors = load_seen(), load_applied(), load_sponsors()
     jobs, errors = fetch_all()
-    top, reviewed, stats = run(jobs, errors, seen, applied)
+    top, rejected, stats = run(jobs, errors, seen, applied, sponsors)
+    print_debug(jobs, top)
     body, text = build_email(top, stats, errors)
     local = NOW.astimezone(ZoneInfo("America/Chicago"))
     subject = f"{len(top)} new roles for you, {local:%a %b %d}"
@@ -535,7 +778,7 @@ def main():
         return
 
     send_email(subject, body, text, build_csv(top))
-    for j in reviewed:
+    for j in top + rejected:
         seen[j.uid] = NOW.isoformat()
     save_seen(seen)
     print(f"Sent {len(top)} roles.")
