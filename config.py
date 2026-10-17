@@ -8,12 +8,39 @@
 # Many slugs below are best guesses. Any that fail are listed at the bottom
 # of the daily email so you can fix or delete them.
 GREENHOUSE = [
+    # already working or on your target list
     "stripe", "instacart", "affirm", "okta", "doordashusa", "via",
     "lyft", "brex", "gusto", "airwallex", "block", "samsara", "flexport",
     "databricks", "scaleai", "faire", "twilio", "datadog", "hubspot", "wayfair",
+    # fintech and payments
+    "robinhood", "coinbase", "chime", "sofi", "marqeta", "navan", "carta",
+    "adyen", "intercom",
+    # marketplaces, consumer and logistics
+    "airbnb", "pinterest", "etsy", "turo", "opendoor", "thumbtack",
+    "project44", "warbyparker", "sweetgreen", "thrivemarket", "nuro",
+    "reddit", "discord", "squarespace",
+    # software and data
+    "dropbox", "asana", "figma", "gitlab", "mongodb", "elastic", "cloudflare",
+    "toast", "pagerduty", "amplitude", "braze", "fivetran", "airtable",
+    "webflow", "vercel", "datarobot", "gleanwork", "6sense",
 ]
-LEVER = ["plaid"]
-ASHBY = ["elevenlabs", "ramp", "openai", "perplexity-ai", "cohere"]
+LEVER = ["plaid", "palantir", "spotify"]
+ASHBY = [
+    "elevenlabs", "ramp", "openai", "perplexity-ai", "cohere",
+    "notion", "linear", "rippling", "deel", "harvey", "sierra", "decagon",
+    "mercury", "writer", "supabase",
+]
+
+# Nicer names for the email (slugs are ugly). Anything missing is auto-formatted.
+COMPANY_NAMES = {
+    "doordashusa": "DoorDash", "scaleai": "Scale AI", "perplexity-ai": "Perplexity",
+    "openai": "OpenAI", "elevenlabs": "ElevenLabs", "hubspot": "HubSpot",
+    "mongodb": "MongoDB", "gitlab": "GitLab", "pagerduty": "PagerDuty",
+    "gleanwork": "Glean", "warbyparker": "Warby Parker", "thrivemarket": "Thrive Market",
+    "datarobot": "DataRobot", "project44": "project44", "6sense": "6sense",
+    "sofi": "SoFi", "fivetran": "Fivetran", "elastic": "Elastic",
+    "plaid": "Plaid", "ramp": "Ramp", "cohere": "Cohere", "deel": "Deel",
+}
 
 # ---------------------------------------------------------------------------
 # 2. Your target companies. Jobs here get a bonus. Names are matched as
@@ -30,30 +57,28 @@ TARGET_COMPANIES = [
 AI_COMPANIES = [
     "OpenAI", "Anthropic", "ElevenLabs", "Databricks", "Scale AI", "Glean",
     "Perplexity", "Cohere", "NVIDIA", "Mistral", "Hugging Face", "Runway",
-    "Harvey", "Sierra", "Decagon", "Anysphere", "Cursor", "Writer",
+    "Harvey", "Sierra", "Decagon", "Anysphere", "Cursor", "Writer", "DataRobot",
 ]
 
 # ---------------------------------------------------------------------------
 # 3. Adzuna search (needs free keys, skipped if not set).
 #    This is how big employers on Workday or their own sites get covered.
-#    Keep total searches under about 70 a day.
+#    The free plan is roughly 1,000 searches a month, so keep this under
+#    about 30 searches a day (queries x locations + companies).
 # ---------------------------------------------------------------------------
 ADZUNA_QUERIES = [
     "partnerships manager",
     "business development manager",
-    "strategic account manager",
     "key account manager",
     "category manager",
     "revenue growth management",
-    "vendor manager",
-    "commercial strategy manager",
 ]
-ADZUNA_LOCATIONS = ["", "Chicago", "New York", "San Francisco", "Los Angeles"]  # "" = all US
+ADZUNA_LOCATIONS = [""]  # "" = all of the US
 
 # One search per company, for employers you cannot read directly.
 ADZUNA_COMPANIES = [
-    "Uber", "DoorDash", "Salesforce", "Amazon", "Google", "SAP", "Deloitte",
-    "EY", "Procter & Gamble", "Coca-Cola", "Walmart", "Target", "Carvana",
+    "Uber", "Salesforce", "Amazon", "Google", "SAP", "Deloitte", "EY",
+    "Procter & Gamble", "Coca-Cola", "Walmart", "Target", "Carvana",
     "Fidelity", "LinkedIn", "NVIDIA", "PayPal", "Mastercard", "Unilever",
     "Colgate-Palmolive", "Reckitt", "PepsiCo", "Mondelez", "Kimberly-Clark",
 ]
@@ -109,6 +134,8 @@ EXCLUDE_TITLE = [
     r"accountant", r"human resources", r"people partner", r"business partner",
     r"finance partner", r"strategic finance",
     r"coordinator", r"assistant", r"administrator",
+    r"marketing", r"financial manager", r"financial analyst", r"\bsupport\b",
+    r"sourcing", r"procurement", r"\bsmb\b", r"small business", r"new business",
 ]
 
 # ---------------------------------------------------------------------------
@@ -156,6 +183,14 @@ MAX_PER_COMPANY = 2          # most roles from one company in one email
 DROP_NO_SPONSORSHIP = True   # drop postings that say they will not sponsor
 SAYS_SPONSORS_BONUS = 15
 ON_SPONSOR_LIST_BONUS = 10   # company is in sponsors.csv
+
+# Words searched on each Workday board. Titles are then judged by TRACKS and
+# EXCLUDE_TITLE above, exactly as for every other source.
+WORKDAY_TERMS = [
+    "partnership", "business development", "account manager", "key account",
+    "category", "revenue growth", "channel", "customer business",
+]
+FETCH_BUDGET_S = 2400   # stop reading more Workday companies after 40 minutes
 
 MAX_AGE_HOURS = 336           # 14 days. Each job is only emailed once.
 ADZUNA_MAX_DAYS = 14

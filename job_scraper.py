@@ -16,6 +16,7 @@ import ssl
 import sys
 import time
 from dataclasses import dataclass, field
+from functools import partial
 from datetime import date, datetime, timedelta, timezone
 from email.message import EmailMessage
 from pathlib import Path
@@ -24,6 +25,7 @@ from zoneinfo import ZoneInfo
 import requests
 
 import config
+import workday
 
 ROOT = Path(__file__).parent
 SEEN_FILE = ROOT / "seen_jobs.json"
@@ -32,8 +34,9 @@ SPONSORS_FILE = ROOT / "sponsors.csv"
 HEADERS = {"User-Agent": "personal-job-scraper/1.0 (personal use)"}
 TIMEOUT = 25
 NOW = datetime.now(timezone.utc)
-METRICS = {"adzuna_calls": 0, "adzuna_jobs": 0}
-ATS_SOURCES = ("greenhouse", "lever", "ashby")
+METRICS = {"adzuna_calls": 0, "adzuna_jobs": 0, "companies_ok": 0, "companies_total": 0}
+COMPANIES_FILE = ROOT / "companies.csv"
+ATS_SOURCES = ("greenhouse", "lever", "ashby", "workday")
 
 
 # ---------------------------------------------------------------------------
@@ -59,6 +62,8 @@ class Job:
     flags: str = ""
     final: float = 0.0
     dropped: str = ""
+    locations: list = field(default_factory=list)
+    alt_uids: list = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -114,7 +119,7 @@ def fetch_greenhouse(slug):
         yield Job(
             source="greenhouse",
             uid=f"gh:{slug}:{j['id']}",
-            company=j.get("company_name") or slug.title(),
+            company=config.COMPANY_NAMES.get(slug) or j.get("company_name") or slug.title(),
             title=j.get("title", ""),
             location=(j.get("location") or {}).get("name", ""),
             url=j.get("absolute_url", ""),
@@ -136,7 +141,7 @@ def fetch_lever(slug):
         yield Job(
             source="lever",
             uid=f"lv:{slug}:{j['id']}",
-            company=slug.title(),
+            company=config.COMPANY_NAMES.get(slug, slug.title()),
             title=j.get("text", ""),
             location=loc,
             url=j.get("hostedUrl", ""),
@@ -156,7 +161,7 @@ def fetch_ashby(slug):
         yield Job(
             source="ashby",
             uid=f"ab:{slug}:{j['id']}",
-            company=slug.title(),
+            company=config.COMPANY_NAMES.get(slug, slug.title()),
             title=j.get("title", ""),
             location=loc,
             url=j.get("jobUrl", ""),
@@ -194,42 +199,136 @@ def _adzuna_search(params):
     time.sleep(0.4)
 
 
+ADZUNA_ERRORS = []
+
+
 def fetch_adzuna():
     if not (os.getenv("ADZUNA_APP_ID") and os.getenv("ADZUNA_APP_KEY")):
         print("adzuna: no keys set, skipping")
         return
+    searches = []
     for query in config.ADZUNA_QUERIES:
         for where in config.ADZUNA_LOCATIONS:
             params = {"what": query}
             if where:
                 params["where"] = where
-            yield from _adzuna_search(params)
+            searches.append(params)
     for company in config.ADZUNA_COMPANIES:
-        yield from _adzuna_search(
-            {"what_or": config.ADZUNA_COMPANY_WORDS, "company": company}
+        searches.append({"what_or": config.ADZUNA_COMPANY_WORDS, "company": company})
+
+    failures = 0
+    for params in searches:
+        label = params.get("company") or params.get("what")
+        try:
+            yield from _adzuna_search(params)
+        except requests.HTTPError as e:
+            code = e.response.status_code if e.response is not None else 0
+            ADZUNA_ERRORS.append(f"adzuna: HTTP {code} on '{label}'")
+            if code in (401, 403, 429):  # bad keys or over the limit: stop
+                break
+            failures += 1
+        except Exception as e:
+            ADZUNA_ERRORS.append(f"adzuna: {e} on '{label}'")
+            failures += 1
+        if failures >= 5:
+            break
+
+
+def load_companies():
+    """Read companies.csv. Columns: name, ats, slug, tenant, board, subdomain, ..."""
+    rows = []
+    if COMPANIES_FILE.exists():
+        with open(COMPANIES_FILE, newline="", encoding="utf-8") as f:
+            for r in csv.DictReader(f):
+                r = {k: (v or "").strip() for k, v in r.items() if k}
+                if r.get("name") and r.get("ats"):
+                    rows.append(r)
+    return rows
+
+
+def fetch_workday(row):
+    def title_ok(t):
+        return bool(track_for(t)) and not title_blocked(t)
+
+    rows, note = workday.fetch(row, config.WORKDAY_TERMS, title_ok)
+    print(f"workday/{row['name']}: {note}")
+    for w in rows:
+        yield Job(
+            source="workday",
+            uid=f"wd:{row['tenant']}:{w['req']}",
+            company=row["name"],
+            title=w["title"],
+            location=w["location"],
+            url=w["url"],
+            posted=parse_iso(w["posted"]),
+            description=w["description"],
         )
 
 
+def build_plan():
+    """List of (kind, label, function, display_name) to run."""
+    rows = load_companies()
+    plan = []
+    if rows:
+        for r in rows:
+            ats, name = r["ats"].lower(), r["name"]
+            if ats == "greenhouse" and r.get("slug"):
+                plan.append((ats, name, partial(fetch_greenhouse, r["slug"]), name))
+            elif ats == "lever" and r.get("slug"):
+                plan.append((ats, name, partial(fetch_lever, r["slug"]), name))
+            elif ats == "ashby" and r.get("slug"):
+                plan.append((ats, name, partial(fetch_ashby, r["slug"]), name))
+            elif ats == "workday" and r.get("tenant"):
+                plan.append((ats, name, partial(fetch_workday, r), None))
+        return plan
+    # no companies.csv: fall back to the short lists in config.py
+    plan += [("greenhouse", s, partial(fetch_greenhouse, s), None) for s in config.GREENHOUSE]
+    plan += [("lever", s, partial(fetch_lever, s), None) for s in config.LEVER]
+    plan += [("ashby", s, partial(fetch_ashby, s), None) for s in config.ASHBY]
+    return plan
+
+
 def fetch_all():
-    jobs, errors = [], []
-    plan = (
-        [("greenhouse", s, fetch_greenhouse) for s in config.GREENHOUSE]
-        + [("lever", s, fetch_lever) for s in config.LEVER]
-        + [("ashby", s, fetch_ashby) for s in config.ASHBY]
-    )
-    for kind, slug, fn in plan:
+    jobs, errors, not_found = [], [], []
+    plan = build_plan()
+    METRICS["companies_total"] = len(plan)
+    started, skipped = time.time(), 0
+    for kind, label, fn, display in plan:
+        if kind == "workday" and time.time() - started > config.FETCH_BUDGET_S:
+            skipped += 1
+            continue
         try:
-            got = list(fn(slug))
-            print(f"{kind}/{slug}: {len(got)} jobs")
+            got = list(fn())
+            if display:
+                for j in got:
+                    j.company = display
+            print(f"{kind}/{label}: {len(got)} jobs")
             jobs += got
+            METRICS["companies_ok"] += 1
         except Exception as e:  # keep going if one company fails
-            errors.append(f"{kind}/{slug}: {e}")
-            print(f"{kind}/{slug}: FAILED {e}")
+            msg = str(e)
+            print(f"{kind}/{label}: FAILED {msg}")
+            if kind == "workday" and "could not find" in msg:
+                not_found.append(label)
+            else:
+                errors.append(f"{kind}/{label}: {msg}")
         time.sleep(0.3)
+    if not_found:
+        print("workday names not found:", ", ".join(not_found))
+        errors.append(
+            f"workday: {len(not_found)} companies not found, tenant name probably wrong: "
+            + ", ".join(not_found[:8]) + (" ..." if len(not_found) > 8 else "")
+            + " (full list in the Actions log)"
+        )
+    if skipped:
+        errors.append(f"workday: stopped early to save time, {skipped} companies skipped")
     try:
         got = list(fetch_adzuna())
         print(f"adzuna: {len(got)} jobs from {METRICS['adzuna_calls']} searches")
         jobs += got
+        if ADZUNA_ERRORS:
+            extra = f" (+{len(ADZUNA_ERRORS) - 1} more)" if len(ADZUNA_ERRORS) > 1 else ""
+            errors.append(ADZUNA_ERRORS[0] + extra)
     except Exception as e:
         errors.append(f"adzuna: {e}")
         print(f"adzuna: FAILED {e}")
@@ -438,12 +537,29 @@ def rule_score(job, companies, sponsors):
     job.resume = pick_resume(job)
 
 
+def merge_same_roles(jobs):
+    """One row per company and title. All cities are listed on that row."""
+    groups, order = {}, []
+    for j in jobs:  # already sorted best first
+        k = (norm(j.company), norm(j.title))
+        if k not in groups:
+            j.locations = [j.location] if j.location else []
+            groups[k] = j
+            order.append(k)
+        else:
+            rep = groups[k]
+            if j.location and j.location not in rep.locations:
+                rep.locations.append(j.location)
+            rep.alt_uids.append(j.uid)
+    return [groups[k] for k in order]
+
+
 def shortlist(jobs, seen, applied, sponsors=None):
     exact, companies = applied
     sponsors = sponsors or []
     cutoff = NOW - timedelta(hours=config.MAX_AGE_HOURS)
     stats = dict(fetched=len(jobs), stale=0, title=0, seen=0, applied=0,
-                 non_us=0, no_sponsor=0, dupe=0, low=0)
+                 non_us=0, no_sponsor=0, dupe=0, low=0, merged=0)
     out, keys = [], set()
 
     def drop(j, key, label):
@@ -484,6 +600,9 @@ def shortlist(jobs, seen, applied, sponsors=None):
             continue
         out.append(j)
     out.sort(key=lambda x: x.score, reverse=True)
+    before = len(out)
+    out = merge_same_roles(out)
+    stats["merged"] = before - len(out)
     return out, stats
 
 
@@ -586,6 +705,13 @@ TRACK_LABEL = {k: v["label"] for k, v in config.TRACKS.items()}
 VISA_LABEL = {"yes": "Says it sponsors", "listed": "On sponsor list", "": "Unknown"}
 
 
+def where_text(j):
+    locs = j.locations or ([j.location] if j.location else [])
+    text = "; ".join(locs[:3])[:90]
+    extra = len(locs) - 3
+    return text + (f" (+{extra} more)" if extra > 0 else "")
+
+
 def age_text(j):
     if not j.posted:
         return "new"
@@ -611,7 +737,7 @@ def build_email(top, stats, errors):
             f"<td>{i}</td><td>{fit}</td>"
             f'<td><a href="{esc(j.url)}">{esc(j.title)}</a><br>'
             f'<span style="color:#555">{esc(j.company)}</span>{badges}</td>'
-            f"<td>{esc(j.location)[:40]}</td>"
+            f"<td>{esc(where_text(j))}</td>"
             f"<td>{esc(TRACK_LABEL.get(j.track, j.track))}</td>"
             f"<td>{esc(j.resume)}</td><td>{esc(VISA_LABEL.get(j.visa, ''))}</td>"
             f"<td>{age_text(j)}</td><td>{note}</td>"
@@ -632,7 +758,9 @@ def build_email(top, stats, errors):
         f"{stats['non_us']} outside the US, {stats['no_sponsor']} saying no sponsorship, "
         f"{stats['seen']} already sent, {stats['applied']} already applied, "
         f"{stats['dupe']} duplicates, {stats['low']} low score. "
-        f"Adzuna: {METRICS['adzuna_calls']} searches, {METRICS['adzuna_jobs']} jobs.</p>"
+        f"{stats['merged']} repeat postings merged into one row. "
+        f"Adzuna: {METRICS['adzuna_calls']} searches, {METRICS['adzuna_jobs']} jobs. "
+        f"Companies read directly: {METRICS['companies_ok']} of {METRICS['companies_total']}.</p>"
         "<p style='color:#666;font-size:12px'>Visa column: most postings say nothing, "
         "so Unknown is normal. \"On sponsor list\" only means the company has filed "
         "H-1B petitions before, not that it will sponsor this role. Always check.</p>"
@@ -641,7 +769,8 @@ def build_email(top, stats, errors):
         footer += (
             "<p style='color:#b91c1c;font-size:12px'>Sources that failed "
             "(fix the slug in config.py or delete it):<br>"
-            + "<br>".join(esc(e) for e in errors)
+            + "<br>".join(esc(e) for e in errors[:12])
+            + (f"<br>(+{len(errors) - 12} more)" if len(errors) > 12 else "")
             + "</p>"
         )
     body = (
@@ -666,7 +795,7 @@ def build_csv(jobs):
         w.writerow([
             round(j.final, 1), j.fit or "", TRACK_LABEL.get(j.track, j.track),
             j.resume, VISA_LABEL.get(j.visa, ""), " ".join(j.tags), j.company,
-            j.title, j.location, j.posted.isoformat() if j.posted else "",
+            j.title, "; ".join(j.locations) or j.location, j.posted.isoformat() if j.posted else "",
             j.url, j.reason, j.flags,
         ])
     return buf.getvalue().encode("utf-8")
@@ -750,13 +879,15 @@ def print_debug(jobs, top):
     if not names:
         return
     emailed = {id(j) for j in top}
+    merged_uids = {u for j in top for u in j.alt_uids}
     print("--- debug: jobs from DEBUG_COMPANIES ---")
     found = False
     for j in jobs:
         if name_match(names, j.company):
             found = True
             status = "EMAILED" if id(j) in emailed else (
-                j.dropped or "passed filters, not in top list")
+                "EMAILED (merged into another city's row)" if j.uid in merged_uids else (
+                    j.dropped or "passed filters, not in top list"))
             print(f"{j.company} | {j.title} | {j.location} | {age_text(j)} | {status}")
     if not found:
         print("none fetched (check the slug in config.py)")
@@ -779,7 +910,8 @@ def main():
 
     send_email(subject, body, text, build_csv(top))
     for j in top + rejected:
-        seen[j.uid] = NOW.isoformat()
+        for uid in [j.uid] + j.alt_uids:
+            seen[uid] = NOW.isoformat()
     save_seen(seen)
     print(f"Sent {len(top)} roles.")
 
