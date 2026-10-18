@@ -8,7 +8,7 @@ Via,greenhouse,via,,,,,unverified,
 Lyft,greenhouse,lyft,,,,,unverified,
 Brex,greenhouse,brex,,,,,unverified,
 Gusto,greenhouse,gusto,,,,,unverified,
-Airwallex,greenhouse,airwallex,,,,,unverified,
+Airwallex,manual,,,,,https://www.airwallex.com/careers,,Greenhouse feed returned 404
 Block,greenhouse,block,,,,,unverified,
 Samsara,greenhouse,samsara,,,,,unverified,
 Flexport,greenhouse,flexport,,,,,unverified,
@@ -17,25 +17,25 @@ Scale AI,greenhouse,scaleai,,,,,unverified,
 Faire,greenhouse,faire,,,,,unverified,
 Twilio,greenhouse,twilio,,,,,unverified,
 Datadog,greenhouse,datadog,,,,,unverified,
-HubSpot,greenhouse,hubspot,,,,,unverified,
-Wayfair,greenhouse,wayfair,,,,,unverified,
+HubSpot,greenhouse,hubspotjobs,,,,,unverified,slug changed from hubspot (404)
+Wayfair,manual,,,,,https://www.aboutwayfair.com/careers,,Greenhouse feed returned 404
 Robinhood,greenhouse,robinhood,,,,,unverified,
 Coinbase,greenhouse,coinbase,,,,,unverified,
 Chime,greenhouse,chime,,,,,unverified,
 SoFi,greenhouse,sofi,,,,,unverified,
-Marqeta,greenhouse,marqeta,,,,,unverified,
-Navan,greenhouse,navan,,,,,unverified,
+Marqeta,manual,,,,,https://www.marqeta.com/company/careers,,Greenhouse feed returned 404
+Navan,manual,,,,,https://navan.com/careers,,Greenhouse feed returned 404
 Carta,greenhouse,carta,,,,,unverified,
 Adyen,greenhouse,adyen,,,,,unverified,
 Intercom,greenhouse,intercom,,,,,unverified,
 Airbnb,greenhouse,airbnb,,,,,unverified,
 Pinterest,greenhouse,pinterest,,,,,unverified,
-Etsy,greenhouse,etsy,,,,,unverified,
-Turo,greenhouse,turo,,,,,unverified,
-Opendoor,greenhouse,opendoor,,,,,unverified,
-Thumbtack,greenhouse,thumbtack,,,,,unverified,
+Etsy,manual,,,,,https://careers.etsy.com,,Greenhouse feed returned 404
+Turo,manual,,,,,https://turo.com/us/en/careers,,Greenhouse feed returned 404
+Opendoor,manual,,,,,https://www.opendoor.com/careers,,Greenhouse feed returned 404
+Thumbtack,manual,,,,,https://www.thumbtack.com/careers,,Greenhouse feed returned 404
 project44,greenhouse,project44,,,,,unverified,
-Warby Parker,greenhouse,warbyparker,,,,,unverified,
+Warby Parker,manual,,,,,https://www.warbyparker.com/careers,,Greenhouse feed returned 404
 Sweetgreen,greenhouse,sweetgreen,,,,,unverified,
 Thrive Market,greenhouse,thrivemarket,,,,,unverified,
 Nuro,greenhouse,nuro,,,,,unverified,
@@ -51,13 +51,13 @@ Elastic,greenhouse,elastic,,,,,unverified,
 Cloudflare,greenhouse,cloudflare,,,,,unverified,
 Toast,greenhouse,toast,,,,,unverified,
 PagerDuty,greenhouse,pagerduty,,,,,unverified,
-Amplitude,greenhouse,amplitude,,,,,unverified,
+Amplitude,manual,,,,,https://amplitude.com/careers,,Greenhouse feed returned 404
 Braze,greenhouse,braze,,,,,unverified,
 Fivetran,greenhouse,fivetran,,,,,unverified,
 Airtable,greenhouse,airtable,,,,,unverified,
 Webflow,greenhouse,webflow,,,,,unverified,
 Vercel,greenhouse,vercel,,,,,unverified,
-DataRobot,greenhouse,datarobot,,,,,unverified,
+DataRobot,manual,,,,,https://www.datarobot.com/careers,,Greenhouse feed returned 404
 Glean,greenhouse,gleanwork,,,,,unverified,
 6sense,greenhouse,6sense,,,,,unverified,
 Plaid,lever,plaid,,,,,unverified,

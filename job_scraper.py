@@ -34,6 +34,7 @@ SPONSORS_FILE = ROOT / "sponsors.csv"
 HEADERS = {"User-Agent": "personal-job-scraper/1.0 (personal use)"}
 TIMEOUT = 25
 NOW = datetime.now(timezone.utc)
+FAILURES = []  # (kind, company, reason) for companies that could not be read
 METRICS = {"adzuna_calls": 0, "adzuna_jobs": 0, "companies_ok": 0, "companies_total": 0}
 COMPANIES_FILE = ROOT / "companies.csv"
 ATS_SOURCES = ("greenhouse", "lever", "ashby", "workday")
@@ -296,6 +297,7 @@ def fetch_all():
     for kind, label, fn, display in plan:
         if kind == "workday" and time.time() - started > config.FETCH_BUDGET_S:
             skipped += 1
+            FAILURES.append((kind, label, "skipped: time limit reached"))
             continue
         try:
             got = list(fn())
@@ -308,6 +310,7 @@ def fetch_all():
         except Exception as e:  # keep going if one company fails
             msg = str(e)
             print(f"{kind}/{label}: FAILED {msg}")
+            FAILURES.append((kind, label, msg))
             if kind == "workday" and "could not find" in msg:
                 not_found.append(label)
             else:
@@ -528,6 +531,9 @@ def rule_score(job, companies, sponsors):
     if sig == "yes":
         job.visa = "yes"
         s += config.SAYS_SPONSORS_BONUS
+    elif sig == "no":
+        job.visa = "no"
+        s -= config.NO_SPONSOR_PENALTY
     elif name_match(sponsors, job.company):
         job.visa = "listed"
         s += config.ON_SPONSOR_LIST_BONUS
@@ -544,6 +550,7 @@ def merge_same_roles(jobs):
         k = (norm(j.company), norm(j.title))
         if k not in groups:
             j.locations = [j.location] if j.location else []
+            j.alt_uids = []
             groups[k] = j
             order.append(k)
         else:
@@ -702,7 +709,8 @@ def rank(pool):
 # Email
 # ---------------------------------------------------------------------------
 TRACK_LABEL = {k: v["label"] for k, v in config.TRACKS.items()}
-VISA_LABEL = {"yes": "Says it sponsors", "listed": "On sponsor list", "": "Unknown"}
+VISA_LABEL = {"yes": "Says it sponsors", "listed": "On sponsor list",
+              "no": "Says no sponsorship", "": "Unknown"}
 
 
 def where_text(j):
@@ -752,25 +760,28 @@ def build_email(top, stats, errors):
         + "".join(rows)
         + "</table>"
     )
+    no_sp = (f"{stats['no_sponsor']} saying no sponsorship, "
+             if config.DROP_NO_SPONSORSHIP else "")
     footer = (
         f"<p style='color:#666;font-size:12px'>Scanned {stats['fetched']} jobs. "
         f"Dropped: {stats['stale']} old, {stats['title']} wrong title or level, "
-        f"{stats['non_us']} outside the US, {stats['no_sponsor']} saying no sponsorship, "
+        f"{stats['non_us']} outside the US, {no_sp}"
         f"{stats['seen']} already sent, {stats['applied']} already applied, "
         f"{stats['dupe']} duplicates, {stats['low']} low score. "
         f"{stats['merged']} repeat postings merged into one row. "
         f"Adzuna: {METRICS['adzuna_calls']} searches, {METRICS['adzuna_jobs']} jobs. "
         f"Companies read directly: {METRICS['companies_ok']} of {METRICS['companies_total']}.</p>"
         "<p style='color:#666;font-size:12px'>Visa column: most postings say nothing, "
-        "so Unknown is normal. \"On sponsor list\" only means the company has filed "
+        "so Unknown is normal. \"Says no sponsorship\" rows are kept but ranked lower. "
+        "\"On sponsor list\" only means the company has filed "
         "H-1B petitions before, not that it will sponsor this role. Always check.</p>"
     )
     if errors:
         footer += (
             "<p style='color:#b91c1c;font-size:12px'>Sources that failed "
-            "(fix the slug in config.py or delete it):<br>"
-            + "<br>".join(esc(e) for e in errors[:12])
-            + (f"<br>(+{len(errors) - 12} more)" if len(errors) > 12 else "")
+            "(fix the row in companies.csv or delete it; the attached companies_to_fix.csv has the full list):<br>"
+            + "<br>".join(esc(e) for e in errors[:40])
+            + (f"<br>(+{len(errors) - 40} more)" if len(errors) > 40 else "")
             + "</p>"
         )
     body = (
@@ -801,6 +812,15 @@ def build_csv(jobs):
     return buf.getvalue().encode("utf-8")
 
 
+def build_failures_csv():
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["type", "company", "reason"])
+    for kind, label, reason in FAILURES:
+        w.writerow([kind, label, reason[:200]])
+    return buf.getvalue().encode("utf-8")
+
+
 def send_email(subject, body, text, csv_bytes):
     user = os.environ["GMAIL_USER"]
     password = os.environ["GMAIL_APP_PASSWORD"]
@@ -812,6 +832,9 @@ def send_email(subject, body, text, csv_bytes):
     msg.set_content(text)
     msg.add_alternative(body, subtype="html")
     msg.add_attachment(csv_bytes, maintype="text", subtype="csv", filename="jobs.csv")
+    if FAILURES:
+        msg.add_attachment(build_failures_csv(), maintype="text", subtype="csv",
+                           filename="companies_to_fix.csv")
     with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=ssl.create_default_context()) as s:
         s.login(user, password)
         s.send_message(msg)

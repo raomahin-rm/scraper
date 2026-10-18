@@ -72,6 +72,9 @@ ADZUNA_QUERIES = [
     "key account manager",
     "category manager",
     "revenue growth management",
+    "commercial manager",
+    "customer development manager",
+    "sales manager",
 ]
 ADZUNA_LOCATIONS = [""]  # "" = all of the US
 
@@ -97,7 +100,7 @@ TRACKS = {
         "weight": 40,
         "patterns": [
             r"partner", r"business development", r"\bbd\b",
-            r"alliances?", r"channel",
+            r"alliances?", r"channel", r"customer development",
         ],
     },
     "category": {
@@ -106,7 +109,9 @@ TRACKS = {
         "patterns": [
             r"category (manager|management|lead|analyst|strategy)",
             r"revenue growth", r"\brgm\b",
-            r"commercial (strategy|finance)", r"trade strategy",
+            r"commercial (manager|lead|analyst|operations|excellence|planning|strategy|finance)",
+            r"pricing strategy", r"revenue management",
+            r"trade (planning|terms|strategy)", r"demand planning",
             r"supplier", r"vendor manager",
             r"marketplace (manager|lead|operations|strategy)",
             r"market research", r"\bbuyer\b",
@@ -118,6 +123,17 @@ TRACKS = {
         "patterns": [
             r"account manage", r"key account", r"strategic account",
             r"national account", r"account executive", r"customer business",
+            r"sales manager",
+            r"customer account",
+        ],
+    },
+    # Corporate roles close to your background. Lower weight than the three above.
+    "corporate": {
+        "label": "Corporate / Commercial Ops",
+        "weight": 28,
+        "patterns": [
+            r"business operations", r"commercial operations", r"sales operations",
+            r"strategy (and|&) operations", r"strategy (manager|lead)",
         ],
     },
 }
@@ -180,7 +196,8 @@ COMPANY_COOLDOWN_DAYS = 60   # recent application = penalty and a warning flag
 MAX_PER_COMPANY = 2          # most roles from one company in one email
 
 # Visa sponsorship signals. Many postings say nothing, so "unknown" stays in.
-DROP_NO_SPONSORSHIP = True   # drop postings that say they will not sponsor
+DROP_NO_SPONSORSHIP = False  # False = keep them, labelled "Says no sponsorship"
+NO_SPONSOR_PENALTY = 10      # ranks them a little lower. Set to 0 for no penalty.
 SAYS_SPONSORS_BONUS = 15
 ON_SPONSOR_LIST_BONUS = 10   # company is in sponsors.csv
 
@@ -189,11 +206,13 @@ ON_SPONSOR_LIST_BONUS = 10   # company is in sponsors.csv
 WORKDAY_TERMS = [
     "partnership", "business development", "account manager", "key account",
     "category", "revenue growth", "channel", "customer business",
+    "commercial", "customer development", "pricing strategy", "revenue management",
+    "sales manager", "sales operations", "business operations",
 ]
 FETCH_BUDGET_S = 2400   # stop reading more Workday companies after 40 minutes
 
-MAX_AGE_HOURS = 336           # 14 days. Each job is only emailed once.
-ADZUNA_MAX_DAYS = 14
+MAX_AGE_HOURS = 720           # 30 days. Each job is only emailed once.
+ADZUNA_MAX_DAYS = 30
 FRESH_24H_BONUS = 10         # newer postings rank higher
 FRESH_72H_BONUS = 5
 DEBUG_COMPANIES = ["Lyft"]  # prints what happened to these companies in the run log
