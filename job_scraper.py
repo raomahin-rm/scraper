@@ -358,45 +358,81 @@ _STATES = (
     "AL AK AZ AR CA CO CT DE FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO "
     "MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY DC"
 ).split()
-STATE_RE = re.compile(r"(?:,\s*|\()(" + "|".join(_STATES) + r")\b")
+STATE_RE = re.compile(r"(?:,\s*|\(|\s-\s)(" + "|".join(_STATES) + r")\b")
+STATE_NAMES_RE = re.compile(
+    r"\b(alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|"
+    r"florida|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|maine|"
+    r"maryland|massachusetts|michigan|minnesota|mississippi|missouri|montana|nebraska|"
+    r"nevada|new hampshire|new jersey|new mexico|new york|north carolina|north dakota|"
+    r"ohio|oklahoma|oregon|pennsylvania|rhode island|south carolina|south dakota|"
+    r"tennessee|texas|utah|vermont|virginia|washington|west virginia|wisconsin|wyoming)\b",
+    re.I,
+)
 US_RE = re.compile(r"\b(united states|usa|u\.s\.a?\.?|us|america)\b", re.I)
+US_CITIES = [
+    "phoenix", "philadelphia", "san antonio", "san diego", "jacksonville", "fort worth",
+    "columbus", "charlotte", "indianapolis", "seattle", "denver", "washington, dc",
+    "el paso", "nashville", "detroit", "oklahoma city", "portland", "las vegas",
+    "memphis", "louisville", "baltimore", "milwaukee", "albuquerque", "tucson",
+    "fresno", "sacramento", "kansas city", "mesa", "omaha", "colorado springs",
+    "raleigh", "miami", "long beach", "virginia beach", "minneapolis", "tulsa",
+    "tampa", "arlington", "new orleans", "wichita", "cleveland", "bakersfield",
+    "santa clara", "bellevue", "cambridge, ma", "pittsburgh", "cincinnati",
+    "st. louis", "saint louis", "salt lake city", "orlando", "charleston", "richmond",
+    "hartford", "stamford", "greenwich", "parsippany", "bentonville", "plano", "irving",
+    "frisco", "round rock", "scottsdale", "tempe", "boulder", "ann arbor", "madison",
+    "des moines", "lexington", "providence", "buffalo", "rochester", "newark",
+    "jersey city", "white plains", "princeton", "cary", "durham", "boise", "honolulu",
+    "anchorage", "san mateo", "south san francisco", "irvine", "burbank", "pasadena",
+    "el segundo", "culver city", "fort lauderdale", "west palm beach", "jacksonville",
+    "chandler", "lehi", "draper", "alpharetta", "norwalk", "purchase, ny",
+]
 NON_US_RE = re.compile(
     r"\b(london|uk|united kingdom|england|scotland|wales|ireland|dublin|germany|"
     r"berlin|munich|hamburg|frankfurt|france|paris|netherlands|amsterdam|spain|"
     r"madrid|barcelona|italy|milan|rome|sweden|stockholm|poland|warsaw|krakow|"
     r"switzerland|zurich|geneva|denmark|copenhagen|norway|oslo|finland|helsinki|"
     r"portugal|lisbon|belgium|brussels|austria|vienna|czech|prague|hungary|"
-    r"budapest|romania|bucharest|greece|athens|cyprus|"
+    r"budapest|romania|bucharest|greece|athens|cyprus|bulgaria|serbia|croatia|"
+    r"slovakia|slovenia|lithuania|latvia|estonia|iceland|luxembourg|malta|ukraine|"
+    r"russia|belarus|"
     r"india|bangalore|bengaluru|mumbai|delhi|new delhi|gurgaon|gurugram|noida|"
-    r"hyderabad|pune|chennai|kolkata|ahmedabad|"
+    r"hyderabad|pune|chennai|kolkata|ahmedabad|sri lanka|nepal|bangladesh|dhaka|"
     r"singapore|japan|tokyo|osaka|korea|seoul|china|shanghai|beijing|shenzhen|"
-    r"guangzhou|hong kong|taiwan|taipei|"
+    r"guangzhou|hong kong|taiwan|taipei|myanmar|cambodia|mongolia|kazakhstan|"
     r"australia|sydney|melbourne|brisbane|new zealand|auckland|"
     r"canada|toronto|vancouver|montreal|ottawa|calgary|"
     r"mexico|mexico city|brazil|sao paulo|argentina|buenos aires|colombia|bogota|"
-    r"chile|santiago|peru|lima|"
-    r"uae|dubai|abu dhabi|saudi|riyadh|qatar|doha|egypt|cairo|israel|tel aviv|"
-    r"pakistan|lahore|karachi|islamabad|bangladesh|dhaka|"
-    r"emea|apac|latam|europe|asia|"
-    r"nigeria|lagos|kenya|nairobi|south africa|cape town|ghana|"
+    r"chile|santiago|peru|lima|costa rica|panama|ecuador|uruguay|venezuela|"
+    r"uae|dubai|abu dhabi|saudi|ksa|riyadh|jeddah|qatar|doha|kuwait|bahrain|oman|"
+    r"jordan|amman|lebanon|beirut|iraq|egypt|cairo|israel|tel aviv|morocco|tunisia|"
+    r"pakistan|lahore|karachi|islamabad|"
+    r"emea|apac|latam|mena|gcc|europe|asia|middle east|"
+    r"nigeria|lagos|kenya|nairobi|south africa|cape town|ghana|ethiopia|uganda|"
+    r"tanzania|rwanda|"
     r"philippines|manila|indonesia|jakarta|vietnam|thailand|bangkok|malaysia|"
     r"kuala lumpur|turkey|istanbul)\b",
     re.I,
 )
 
 
-def location_info(loc):
-    """Return (kind, points). kind is tier1, us, remote, unknown or non_us."""
+def location_info(loc, desc=""):
+    """Return (kind, points). kind: tier1, us, remote, unknown or non_us.
+
+    US only is a whitelist: a place has to look American to pass.
+    """
     loc = loc or ""
     l = loc.lower()
     if any(c in l for c in config.TIER1_CITIES) or re.search(r",\s*(TX|MA)\b", loc):
         return "tier1", config.LOC_POINTS_TIER1
-    if US_RE.search(loc) or STATE_RE.search(loc):
+    if (US_RE.search(loc) or STATE_RE.search(loc) or STATE_NAMES_RE.search(loc)
+            or any(c in l for c in US_CITIES)):
         return "us", (config.LOC_POINTS_REMOTE if "remote" in l else config.LOC_POINTS_OTHER_US)
     if NON_US_RE.search(l):
         return "non_us", 0
-    if "remote" in l:
-        return "remote", config.LOC_POINTS_REMOTE
+    if ("remote" in l or re.match(r"^\s*\d+\s+locations?\s*$", l)) and re.search(
+            r"\b(united states|u\.s\.|us-based|within the us|across the us)\b", (desc or "").lower()):
+        return "us", config.LOC_POINTS_REMOTE
     return "unknown", 0
 
 
@@ -481,7 +517,7 @@ def rule_score(job, companies, sponsors):
 
     s = config.TRACKS[job.track]["weight"]
     s += level_points(job.title)
-    s += location_info(job.location)[1]
+    s += location_info(job.location, job.description)[1]
 
     if job.posted:
         hrs = (NOW - job.posted).total_seconds() / 3600
@@ -543,6 +579,20 @@ def rule_score(job, companies, sponsors):
     job.resume = pick_resume(job)
 
 
+def domain_check(job):
+    """Return a reason if the description is off-topic, else None."""
+    d = job.description.lower()
+    if len(d) < 300:  # too short to judge (for example, details not fetched)
+        return None
+    off = sum(1 for w in config.OFF_DOMAIN_WORDS if re.search(r"\b" + re.escape(w), d))
+    if off >= config.OFF_DOMAIN_HITS:
+        return "off-topic (advertising, cloud or similar)"
+    on = sum(1 for w in config.DOMAIN_WORDS if re.search(r"\b" + re.escape(w), d))
+    if on < config.MIN_DOMAIN_HITS:
+        return "description does not match your background"
+    return None
+
+
 def merge_same_roles(jobs):
     """One row per company and title. All cities are listed on that row."""
     groups, order = {}, []
@@ -566,7 +616,7 @@ def shortlist(jobs, seen, applied, sponsors=None):
     sponsors = sponsors or []
     cutoff = NOW - timedelta(hours=config.MAX_AGE_HOURS)
     stats = dict(fetched=len(jobs), stale=0, title=0, seen=0, applied=0,
-                 non_us=0, no_sponsor=0, dupe=0, low=0, merged=0)
+                 non_us=0, domain=0, no_sponsor=0, dupe=0, low=0, merged=0)
     out, keys = [], set()
 
     def drop(j, key, label):
@@ -589,8 +639,12 @@ def shortlist(jobs, seen, applied, sponsors=None):
         if (norm(j.company), norm(j.title)) in exact or j.url in exact:
             drop(j, "applied", "already applied")
             continue
-        if config.US_ONLY and location_info(j.location)[0] == "non_us":
-            drop(j, "non_us", "outside the US")
+        if config.US_ONLY and location_info(j.location, j.description)[0] in ("non_us", "unknown"):
+            drop(j, "non_us", "outside the US or location not clearly US")
+            continue
+        why = domain_check(j)
+        if why:
+            drop(j, "domain", why)
             continue
         if config.DROP_NO_SPONSORSHIP and sponsor_signal(j.description) == "no":
             drop(j, "no_sponsor", "says no sponsorship")
@@ -665,18 +719,24 @@ def llm_review(job):
             return
 
 
+def base_title(title):
+    return norm(re.split(r"[,\-\u2013|(:/]", title)[0])
+
+
 def cap_per_company(jobs):
     """At most MAX_PER_COMPANY different roles per company.
 
-    The same role posted in several cities counts once, so you see every city.
+    Roles with the same main title (for example "Account Executive, Retail" and
+    "Account Executive, Travel") count as one, and the same role in several
+    cities counts once.
     """
-    titles, out = {}, []
+    families, out = {}, []
     for j in jobs:
-        seen_titles = titles.setdefault(norm(j.company), [])
-        t = norm(j.title)
-        if t in seen_titles or len(seen_titles) < config.MAX_PER_COMPANY:
-            if t not in seen_titles:
-                seen_titles.append(t)
+        fam = families.setdefault(norm(j.company), [])
+        b = base_title(j.title)
+        if b in fam or len(fam) < config.MAX_PER_COMPANY:
+            if b not in fam:
+                fam.append(b)
             out.append(j)
     return out
 
@@ -765,7 +825,8 @@ def build_email(top, stats, errors):
     footer = (
         f"<p style='color:#666;font-size:12px'>Scanned {stats['fetched']} jobs. "
         f"Dropped: {stats['stale']} old, {stats['title']} wrong title or level, "
-        f"{stats['non_us']} outside the US, {no_sp}"
+        f"{stats['non_us']} outside the US or unclear location, "
+        f"{stats['domain']} off-topic by description, {no_sp}"
         f"{stats['seen']} already sent, {stats['applied']} already applied, "
         f"{stats['dupe']} duplicates, {stats['low']} low score. "
         f"{stats['merged']} repeat postings merged into one row. "

@@ -111,6 +111,7 @@ TRACKS = {
             r"revenue growth", r"\brgm\b",
             r"commercial (manager|lead|analyst|operations|excellence|planning|strategy|finance)",
             r"pricing strategy", r"revenue management",
+            r"strategy (manager|lead)", r"strategy (and|&) operations",
             r"trade (planning|terms|strategy)", r"demand planning",
             r"supplier", r"vendor manager",
             r"marketplace (manager|lead|operations|strategy)",
@@ -125,15 +126,6 @@ TRACKS = {
             r"national account", r"account executive", r"customer business",
             r"sales manager",
             r"customer account",
-        ],
-    },
-    # Corporate roles close to your background. Lower weight than the three above.
-    "corporate": {
-        "label": "Corporate / Commercial Ops",
-        "weight": 28,
-        "patterns": [
-            r"business operations", r"commercial operations", r"sales operations",
-            r"strategy (and|&) operations", r"strategy (manager|lead)",
         ],
     },
 }
@@ -152,6 +144,18 @@ EXCLUDE_TITLE = [
     r"coordinator", r"assistant", r"administrator",
     r"marketing", r"financial manager", r"financial analyst", r"\bsupport\b",
     r"sourcing", r"procurement", r"\bsmb\b", r"small business", r"new business",
+    # advertising and media
+    r"advertis", r"\bads?\b", r"ad sales", r"ad.?tech", r"programmatic", r"publisher",
+    r"sell.side", r"buy.side", r"\bdsp\b", r"\bssp\b", r"\bmedia\b",
+    # product, program and technical-sounding roles
+    r"product manager", r"product (lead|owner|operations|partner)", r"\bproduct\b",
+    r"program manager", r"networking", r"\bnetwork\b", r"cloud", r"\bcsp\b",
+    r"hyperscal", r"semiconductor", r"silicon", r"data.?center", r"cyber", r"\bsecurity\b",
+    # payments and merchant services
+    r"merchant",
+    # operations titles you do not want
+    r"sales operations", r"business operations", r"commercial operations",
+    r"revenue operations",
 ]
 
 # ---------------------------------------------------------------------------
@@ -193,7 +197,7 @@ TARGET_COMPANY_BONUS = 8     # company is on your target list
 NEW_COMPANY_BONUS = 8        # you have not applied there before
 ATS_BONUS = 6                # read directly from the company's own job feed
 COMPANY_COOLDOWN_DAYS = 60   # recent application = penalty and a warning flag
-MAX_PER_COMPANY = 2          # most roles from one company in one email
+MAX_PER_COMPANY = 1          # most different roles from one company in one email
 
 # Visa sponsorship signals. Many postings say nothing, so "unknown" stays in.
 DROP_NO_SPONSORSHIP = False  # False = keep them, labelled "Says no sponsorship"
@@ -210,6 +214,29 @@ WORKDAY_TERMS = [
     "sales manager", "sales operations", "business operations",
 ]
 FETCH_BUDGET_S = 2400   # stop reading more Workday companies after 40 minutes
+
+# Domain gate. Job descriptions are checked as well as titles.
+# A description that mentions 3 or more of these is dropped as off-topic.
+OFF_DOMAIN_WORDS = [
+    "advertis", "ad tech", "adtech", "programmatic", "ad sales", "ad inventory",
+    "publishers", "demand-side", "supply-side", "sell-side", "buy-side",
+    "media buying", "ad platform", "ads platform", "kubernetes", "networking",
+    "hyperscaler", "cloud service provider", "semiconductor", "firmware",
+    "devops", "cybersecurity",
+]
+OFF_DOMAIN_HITS = 3
+# A description needs at least MIN_DOMAIN_HITS of these (your world).
+DOMAIN_WORDS = [
+    "retail", "grocery", "cpg", "consumer goods", "fmcg", "category management",
+    "category manager", "supplier", "vendor", "wholesale", "distribution",
+    "distributor", "e-commerce", "ecommerce", "marketplace", "b2b", "key account",
+    "strategic account", "joint business", "p&l", "negotiat", "reseller",
+    "channel partner", "go-to-market", "gtm", "saas", "enterprise sales",
+    "account management", "revenue growth", "trade terms", "pricing", "forecast",
+    "supply chain", "last-mile", "last mile", "logistics", "packaging", "beverage",
+    "food", "strategic partnership", "partner ecosystem", "customer development",
+]
+MIN_DOMAIN_HITS = 2
 
 MAX_AGE_HOURS = 720           # 30 days. Each job is only emailed once.
 ADZUNA_MAX_DAYS = 30
