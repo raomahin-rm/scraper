@@ -16,7 +16,7 @@ concurrency:
 jobs:
   preview:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
@@ -27,9 +27,9 @@ jobs:
           cache: pip
       - run: pip install -r requirements.txt
       - name: Run delivery and history regression tests
-        run: python test_history_v2.py && python test_deliver_v2.py
-      - name: Retrieve jobs (first 80 entries; no mail)
-        run: python scraper_v2.py --limit 80 --output v2_jobs.json
+        run: python test_rank_v2.py && python test_history_v2.py && python test_deliver_v2.py
+      - name: Retrieve jobs (all configured company entries; no mail)
+        run: python scraper_v2.py --limit 305 --output v2_jobs.json
       - name: Rank eligible jobs
         run: python rank_v2.py --input v2_jobs.json --output v2_shortlist.json --limit 40
       - name: Generate pending-jobs email preview (no send)
