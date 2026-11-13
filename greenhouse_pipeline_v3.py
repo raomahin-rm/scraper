@@ -355,6 +355,10 @@ def run_browser(packet, db_path, output, submit=False, approval_comment=None):
             if not submit:
                 packet["live_schema"] = schema
                 packet["live_review"] = {"errors": result["errors"], "unresolved_live_fields": result["unresolved_live_fields"]}
+                complete = not (result["errors"] or result["unresolved_live_fields"] or packet["missing_required"] or packet["screening"]["decision"] == "blocked")
+                packet["status"] = "ready_for_review" if complete else "needs_review"
+                if complete and db["applications"][packet["id"]]["status"] == "draft":
+                    db["applications"][packet["id"]]["status"] = "ready_for_review"
             result["blocked_mutations"] = blocked
             result["packet_digest"] = approval_digest(packet)
             page.screenshot(path=str(output / "filled-form.png"), full_page=True)
@@ -392,7 +396,20 @@ def run_browser(packet, db_path, output, submit=False, approval_comment=None):
     finally:
         save(db_path, db)
         save(output / "result.json", result)
+        save(output / "result.public.json", public_summary(packet, result))
     return result
+
+def public_summary(packet, result):
+    """Publish control/schema evidence without contact details or answer values."""
+    return {"id": packet["id"], "company": packet["company"], "title": packet["title"],
+            "status": packet.get("status"), "packet_digest": approval_digest(packet),
+            "filled_fields": result.get("filled_fields", []),
+            "deferred_document_uploads": result.get("deferred_document_uploads", []),
+            "errors": result.get("errors", []), "missing_required": packet["missing_required"],
+            "live_schema": packet.get("live_schema", []),
+            "live_review": packet.get("live_review", {}),
+            "job_fingerprint": packet["job_fingerprint"], "prepared_at": packet["prepared_at"],
+            "submitted": result.get("submitted", False)}
 
 def execute(packet, db_path, output, submit=False, approval_comment=None):
     try:
@@ -482,7 +499,7 @@ def main():
             if a.action == "fill":
                 save(a.packet, packet)
                 Path(a.packet).with_name("review.md").write_text(render_review(packet), encoding="utf-8")
-        print(json.dumps({k: result[k] for k in ("id", "submitted")}))
+        print(json.dumps(public_summary(packet, result)))
         if result.get("errors"):
             raise SystemExit("Form filling encountered errors; inspect result.json")
 
