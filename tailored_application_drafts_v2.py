@@ -32,9 +32,24 @@ def prepare(packet):
         "I would welcome the opportunity to discuss how this background aligns with "
         f"the {title} role and your team's objectives.\n\n"
         "Sincerely,\nRao Mahin")
+    # Letter layout follows the user's Faire reference; personal contact details stay private.
+    letter_layout={
+        "sender_name":"Rao Mahin",
+        "sender_contact":"PRIVATE_CONTACT_DETAILS_INSERT_AT_FINAL_RENDER",
+        "date_alignment":"right",
+        "date":"CURRENT_DATE_AT_RENDER",
+        "recipient":"Hiring Manager / company team (verify employer address)",
+        "subject":f"Application for {title}",
+        "salutation":f"Dear {company} Hiring Team,",
+        "closing":"Best regards,\\nRao Mahin",
+        "format_reference":"Faire letter: sender top-left, date right, recipient, salutation, body, closing",
+    }
+    # Cover letters are optional by default, not mandatory for all 40 applications.
+    # Only required or demonstrably high-value optional letters should be finalized.
+    cover_letter_decision="review_requirement_and_role_fit"
     return {"id":packet["id"],"company":company,"title":title,
             "application_url":packet["application_url"],
-            "why_company_draft":motivation,"optional_cover_letter_draft":letter,
+            "why_company_draft":motivation,"optional_cover_letter_draft":letter,"cover_letter_decision":cover_letter_decision,"cover_letter_layout":letter_layout,
             "company_specific_research_verified":False,
             "note":"Tailored to company name and role; validate job requirements and employer priorities before approval.",
             "salary_guidance":"If a verified published base salary range exceeds the baseline, propose its midpoint for user review; otherwise review individually.",
