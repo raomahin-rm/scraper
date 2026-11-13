@@ -1,0 +1,46 @@
+name: Application automation stages 2 and 3 - safe queue
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  prepare-queue:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: phase1-scraper-development
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Test approval gates and duplicate prevention
+        run: python test_application_queue_v2.py && python test_scraper_v2.py && python test_rank_v2.py
+      - name: Retrieve and rank jobs
+        run: |
+          python scraper_v2.py --limit 305 --output v2_jobs.json
+          python rank_v2.py --input v2_jobs.json --output v2_shortlist.json --limit 40
+      - name: Prepare draft applications only
+        run: python application_queue_v2.py import --shortlist v2_shortlist.json --db applications_v2.json
+      - name: Assert no applications were submitted
+        run: |
+          python - <<'PY'
+          import json
+          data=json.load(open('applications_v2.json'))
+          assert data['applications']
+          assert all(a['status']=='draft' for a in data['applications'].values())
+          print('Draft applications:',len(data['applications']))
+          print('No submissions performed.')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: application-review-queue
+          retention-days: 14
+          path: |
+            applications_v2.json
+            v2_shortlist.json
