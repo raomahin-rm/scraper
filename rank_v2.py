@@ -100,7 +100,7 @@ def shortlist(jobs, limit=40):
     diversified = []
     for job in eligible:
         company = (job.get("company") or "").strip().casefold()
-        if company_counts[company] >= 3:
+        if company_counts[company] >= 2:
             continue
         diversified.append(job)
         company_counts[company] += 1
