@@ -1,0 +1,28 @@
+name: Replacement v2 discover missing ATS feeds
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: phase1-scraper-development
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Verify candidate Greenhouse, Ashby, Lever feeds for unconfigured companies
+        run: python discover_feeds_v2.py --limit 305 --output feed_repair_candidates.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verified-feed-repair-candidates
+          retention-days: 30
+          path: feed_repair_candidates.json
