@@ -18,6 +18,8 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install -r requirements.txt
+      - name: Test replacement history and delivery (offline)
+        run: python test_history_v2.py && python test_deliver_v2.py
       - name: Audit first 80 configured company entries (read-only)
         run: python audit_feeds.py --limit 80 --delay 0.5
       - name: Retrieve replacement scraper sample (read-only, no email)
@@ -26,6 +28,10 @@ jobs:
         run: python rank_v2.py --input v2_jobs.json --output v2_shortlist.json --limit 40
       - name: Render daily email preview (no sending)
         run: python email_preview_v2.py --input v2_shortlist.json --output v2_email_preview.html
+      - name: Preview only newly eligible jobs (no Gmail credentials)
+        run: python deliver_v2.py --input v2_shortlist.json --history v2_history.json --preview v2_pending_preview.html
+      - name: Verify no history was created
+        run: test ! -e v2_history.json
       - uses: actions/upload-artifact@v4
         with:
           name: company-feed-audit
@@ -34,3 +40,4 @@ jobs:
             v2_jobs.json
             v2_shortlist.json
             v2_email_preview.html
+            v2_pending_preview.html
