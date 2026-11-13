@@ -20,6 +20,9 @@ class HistoryTests(unittest.TestCase):
             hist=mark_delivered([{"id":"gh:1","company":"A"}],{})
             save_history(path,hist)
             self.assertEqual(load_history(path),hist)
+    def test_empty_jobs(self):
+        self.assertEqual(new_jobs([], {}), [])
+        self.assertEqual(mark_delivered([], {}), {})
     def test_no_pruning(self):
         hist={"old":{"delivered_at":"2020-01-01"}}
         self.assertIn("old",mark_delivered([{"id":"new"}],hist))
