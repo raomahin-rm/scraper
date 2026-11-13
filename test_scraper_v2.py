@@ -31,6 +31,29 @@ class ReplacementTests(unittest.TestCase):
         jobs,failures=v2.scan([row,row],session,delay=0)
         self.assertEqual(len(jobs),1)
         self.assertEqual(failures,[])
+    def test_workday_pagination_collects_all_pages(self):
+        row={"ats":"workday","tenant":"example","board":"External","subdomain":"wd5","name":"Example"}
+        def page(start, count):
+            return {"total":5,"jobPostings":[{"externalPath":"/job/"+str(i),"title":"Partnerships Manager","locationsText":"Chicago, IL"} for i in range(start,start+count)]}
+        session=Mock()
+        responses=[]
+        for payload in (page(0,2),page(2,2),page(4,1)):
+            response=Mock()
+            response.json.return_value=payload
+            responses.append(response)
+        session.post.side_effect=responses
+        jobs,failures=v2.scan([row],session,delay=0,workday_page_size=2)
+        self.assertEqual(len(jobs),5)
+        self.assertEqual(failures,[])
+        self.assertEqual([call.kwargs["json"]["offset"] for call in session.post.call_args_list],[0,2,4])
+    def test_workday_repeated_page_stops(self):
+        row={"ats":"workday","tenant":"example","board":"External","subdomain":"wd5","name":"Example"}
+        session=Mock()
+        session.post.return_value.json.return_value={"total":100,"jobPostings":[{"externalPath":"/job/1","title":"Partnerships Manager","locationsText":"Chicago, IL"}]}
+        jobs,failures=v2.scan([row],session,delay=0,workday_page_size=1)
+        self.assertEqual(len(jobs),1)
+        self.assertEqual(len(failures),1)
+        self.assertIn("repeated page",failures[0]["reason"])
     def test_invalid_payload_records_failure(self):
         row={"ats":"greenhouse","slug":"stripe","name":"Stripe"}
         session=Mock()
