@@ -1,0 +1,33 @@
+name: Replacement v2 full company feed audit
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: phase1-scraper-development
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Audit all 305 company entries (read-only)
+        run: python audit_feeds.py --limit 305 --delay 0.1
+      - name: Summarize by ATS and failure category
+        run: python audit_report_v2.py --input feed_audit.csv --output feed_audit_summary.md
+      - name: Upload full audit for repairs
+        uses: actions/upload-artifact@v4
+        with:
+          name: replacement-full-feed-audit
+          retention-days: 30
+          path: |
+            feed_audit.csv
+            feed_audit_summary.md
