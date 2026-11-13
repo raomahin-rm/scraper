@@ -1,0 +1,8 @@
+{
+  "work_authorization": {"answer": null, "approved": false},
+  "sponsorship": {"answer": null, "approved": false},
+  "salary": {"answer": null, "approved": false},
+  "relocation": {"answer": null, "approved": false},
+  "start_date": {"answer": null, "approved": false},
+  "years_experience": {"answer": null, "approved": false}
+}
