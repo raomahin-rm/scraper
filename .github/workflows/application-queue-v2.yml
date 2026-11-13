@@ -41,8 +41,8 @@ jobs:
           python-version: "3.11"
           cache: pip
       - run: pip install -r requirements.txt
-      - name: Test approval gates and duplicate prevention
-        run: python test_application_queue_v2.py && python test_application_answers_v2.py && python test_employer_questions_v2.py && python test_employer_answer_matches_v2.py && python test_scraper_v2.py && python test_rank_v2.py
+      - name: Run the complete regression suite
+        run: python -m unittest discover -p 'test_*.py'
       - name: Restore previous application queue when available
         if: inputs.mode != 'submit'
         env:
