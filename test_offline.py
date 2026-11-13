@@ -58,7 +58,8 @@ print(stats)
 titles = [j.title for j in top]
 assert not any("Rep" in t for t in titles)
 assert not any("Strategic Finance" in t for t in titles)
-assert stats["non_us"] == 4 and stats["no_sponsor"] == 1
+assert stats["non_us"] == 4
+assert stats["no_sponsor"] == (1 if js.config.DROP_NO_SPONSORSHIP else 0)
 assert any(j.company == "Sponsorly" and j.visa == "yes" for j in top)
 assert any(j.company == "OpenAI" and j.resume == "AI/Tech resume" for j in top)
 assert any(j.company == "Procter & Gamble" and j.resume == "Commercial resume" for j in top)
