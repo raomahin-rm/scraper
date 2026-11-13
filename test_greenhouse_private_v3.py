@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import patch, Mock
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-from greenhouse_private_v3 import make_keyring, private_key, seal, open_bundle, derive, bootstrap
+from greenhouse_private_v3 import make_keyring, private_key, seal, open_bundle, derive, bootstrap, get_file, encode
 
 class PrivateMaterialTests(unittest.TestCase):
     @classmethod
@@ -26,6 +26,11 @@ class PrivateMaterialTests(unittest.TestCase):
             names=open_bundle(self.ring,bundle,self.secret,p/'out')
             self.assertEqual(set(names),{'contact.json','overrides.json','resume.pdf'})
             self.assertEqual((p/'out'/'contact.json').read_text(),(p/'source'/'contact.json').read_text())
+    def test_github_wrapped_base64_response_is_decoded(self):
+        encoded=encode(json.dumps({'version':1}).encode())
+        response=Mock();response.status_code=200;response.json.return_value={'content':encoded[:8]+'\n'+encoded[8:]+'\n'}
+        with patch('greenhouse_private_v3.requests.get',return_value=response),patch.dict('os.environ',{'GH_TOKEN':'test-only'}):
+            self.assertEqual(get_file('private-materials/keyring.json'),{'version':1})
     def test_wrong_secret_never_replaces_key(self):
         with self.assertRaises(ValueError):private_key(self.ring,'wrong-secret-long-enough')
     def test_key_fingerprint_tampering_rejected(self):

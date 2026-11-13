@@ -123,7 +123,7 @@ def get_file(path):
     if r.status_code == 404:
         return None
     r.raise_for_status()
-    return json.loads(decode(r.json()['content']))
+    return json.loads(decode(''.join(r.json()['content'].split())))
 
 
 def bootstrap():
