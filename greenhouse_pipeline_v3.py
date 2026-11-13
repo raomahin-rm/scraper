@@ -255,9 +255,14 @@ def fill_value(page, answer):
         if loc.is_checked() != value:
             raise ValueError("Checkbox readback mismatch")
     elif loc.get_attribute("role") == "combobox":
-        loc.fill(str(value))
+        loc.click()
         option = page.get_by_role("option", name=str(value), exact=True)
-        option.wait_for(timeout=15000)
+        try:
+            option.wait_for(timeout=2000)
+        except Exception:
+            # Searchable async widgets (country/location/school) need a query.
+            loc.fill(str(value))
+            option.wait_for(timeout=15000)
         if option.count() != 1:
             raise ValueError("Ambiguous dropdown option: " + name)
         option.click()
@@ -351,7 +356,8 @@ def run_browser(packet, db_path, output, submit=False, approval_comment=None):
                 save(db_path, db)  # Persist before click: crash/timeout is NEVER auto-retried.
                 durable_attempt(packet, approval)
                 page.get_by_role("button", name="Submit application", exact=True).click()
-                confirmation = page.get_by_text(re.compile(r"(?:application has been (?:received|submitted)|thank you for applying|successfully submitted)", re.I)).first
+                page.locator('input[id="first_name"]').wait_for(state="hidden", timeout=30000)
+                confirmation = page.get_by_text(re.compile(r"^(?:your )?(?:application has been (?:received|submitted)|thank you for applying|successfully submitted)[.!\s]*$", re.I)).first
                 confirmation.wait_for(timeout=30000)
                 result.update(submitted=True, confirmation=confirmation.inner_text(), confirmed_url=page.url)
                 app = db["applications"][packet["id"]]
@@ -461,6 +467,8 @@ def main():
                 save(a.packet, packet)
                 Path(a.packet).with_name("review.md").write_text(render_review(packet), encoding="utf-8")
         print(json.dumps({k: result[k] for k in ("id", "submitted")}))
+        if result.get("errors"):
+            raise SystemExit("Form filling encountered errors; inspect result.json")
 
 if __name__ == "__main__":
     main()

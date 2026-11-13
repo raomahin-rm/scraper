@@ -29,4 +29,16 @@ class BrowserTests(unittest.TestCase):
                 self.assertFalse(result['submitted'])
             browser.close()
 
+    def test_nonsearchable_greenhouse_dropdown_opens_before_selection(self):
+        with sync_playwright() as p:
+            kwargs={'headless':True}
+            if os.environ.get('CHROMIUM_PATH'):kwargs['executable_path']=os.environ['CHROMIUM_PATH']
+            browser=p.chromium.launch(**kwargs);page=browser.new_page()
+            page.set_content('''<div class="select__control"><span id="selected"></span>
+              <input id="sponsor" role="combobox" readonly onclick="document.getElementById('choices').hidden=false">
+              <div id="choices" hidden><div role="option" onclick="document.getElementById('selected').textContent='Yes';document.getElementById('choices').hidden=true">Yes</div></div></div>''')
+            self.assertTrue(fill_value(page,{'name':'sponsor','value':'Yes'}))
+            self.assertEqual(page.locator('#selected').inner_text(),'Yes')
+            browser.close()
+
 if __name__=='__main__':unittest.main()

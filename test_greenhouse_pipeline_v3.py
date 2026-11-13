@@ -90,3 +90,22 @@ class PipelineTests(unittest.TestCase):
             self.assertNotIn('private@example.com',db.read_text())
 
 if __name__=='__main__':unittest.main()
+
+class DurableJournalTests(unittest.TestCase):
+    def test_missing_token_blocks_submission(self):
+        _,_,_,p=fixtures()
+        with patch.dict('os.environ',{},clear=True):
+            with self.assertRaises(ValueError):g.durable_attempt(p,{'packet_digest':'x','comment_id':1})
+    def test_prior_reservation_blocks_retry(self):
+        _,_,_,p=fixtures();session=Mock();session.get.return_value.status_code=200
+        with patch.dict('os.environ',{'GH_TOKEN':'test-only'}):
+            with self.assertRaises(ValueError):g.durable_attempt(p,{'packet_digest':'x','comment_id':1},session=session)
+        session.put.assert_not_called()
+    def test_reservation_written_before_attempt(self):
+        _,_,_,p=fixtures();session=Mock();absent=Mock();absent.status_code=404;branch=Mock();branch.status_code=200
+        session.get.side_effect=[absent,branch]
+        with patch.dict('os.environ',{'GH_TOKEN':'test-only'}):g.durable_attempt(p,{'packet_digest':'x','comment_id':1},session=session)
+        body=session.put.call_args.kwargs['json'];self.assertNotIn('sha',body)
+        import base64
+        payload=json.loads(base64.b64decode(body['content']));self.assertEqual(payload['state'],'submission_started')
+        self.assertNotIn('answers',payload)
