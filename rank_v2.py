@@ -27,6 +27,7 @@ BLOCK = [
     r"\b(marketing|advertising|ad sales|media buying|procurement analyst)\b",
     r"\b(technology sourcing|strategic sourcing|procurement)\b",
     r"\b(coordinator|administrator)\b",
+    r"\b(revenue accounting|technical accounting|financial reporting|controller|audit manager)\b",
 ]
 # Conservative: unknown geography goes to review rather than falsely treated as US.
 US_STATES = r"\b(?:AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|DC)\b"
@@ -39,7 +40,12 @@ def location_class(location):
     raw = location or ""
     s = raw.lower()
     us = any(x in s for x in US_WORDS) or bool(re.search(US_STATES, raw))
-    foreign = any(x in s for x in NON_US)
+    foreign = any(x in s for x in NON_US) or bool(re.search(r"\\b(?:munich|berlin|hamburg|frankfurt|paris|toronto|vancouver)\\b",s))
+    # Country prefixes such as DE - Munich are not US state abbreviations.
+    if re.match(r"^\\s*(?:DE|FR|GB|UK|CA|IN|AU|NL|IE|SG)\\s*[-–|:]\\s*",raw,re.I) and not any(x in s for x in US_WORDS):
+        return "non_us"
+    if foreign and not any(x in s for x in US_WORDS):
+        return "non_us"
     if us:
         return "us"  # Multi-location jobs may mention both US and non-US.
     if foreign:
