@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
     paths: [".github/workflows/application-queue-v2.yml"]
+  issue_comment:
+    types: [created]
   workflow_dispatch:
     inputs:
       mode:
@@ -32,6 +34,7 @@ concurrency:
 
 jobs:
   prepare-queue:
+    if: github.event_name != 'issue_comment'
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
@@ -201,3 +204,97 @@ jobs:
             employer_questions_v2.json
             employer_answer_matches_v2.json
             tailored_application_drafts_v2.json
+
+  submit-approved-application:
+    if: github.event_name == 'issue_comment' && github.event.comment.user.login == 'raomahin-rm' && startsWith(github.event.comment.body, 'I APPROVE SUBMIT ')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: phase1-scraper-development
+      - name: Resolve the exact individually approved packet
+        run: |
+          python - <<'PY'
+          import json,os,re,pathlib
+          event=json.load(open(os.environ['GITHUB_EVENT_PATH']))
+          comment=event['comment']
+          assert comment['user']['login']=='raomahin-rm'
+          m=re.fullmatch(r'I APPROVE SUBMIT ([a-f0-9]{16}) ([a-f0-9]{64})',comment['body'].strip())
+          assert m, 'Individual approval statement required'
+          record=json.load(open('approved_application_runs_v3.json'))[m[1]]
+          assert record['packet_digest']==m[2], 'Approval does not match the reviewed packet'
+          assert str(record['packet_run_id']).isdigit()
+          with open(os.environ['GITHUB_ENV'],'a') as f:
+              f.write('APP_ID='+m[1]+'\nPACKET_RUN='+str(record['packet_run_id'])+'\nCOMMENT_ID='+str(comment['id'])+'\n')
+          PY
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Initialize private-material access
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GREENHOUSE_WRAPPING_SECRET: ${{ secrets.APPLICATION_PACKET_KEY || secrets.GMAIL_APP_PASSWORD }}
+        run: python greenhouse_private_v3.py bootstrap
+      - name: Restore the exact reviewed application and queue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download "$PACKET_RUN" --repo "$GITHUB_REPOSITORY" -n greenhouse-pipeline -D runtime/greenhouse
+          python greenhouse_artifacts_v3.py unpack runtime/greenhouse/packets.enc runtime/greenhouse
+          cp runtime/greenhouse/applications_v2.json applications_v2.json
+          gh run download "$PACKET_RUN" --repo "$GITHUB_REPOSITORY" -n application-review-queue -D runtime/legacy
+      - name: Restore individually approved private documents
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GREENHOUSE_WRAPPING_SECRET: ${{ secrets.APPLICATION_PACKET_KEY || secrets.GMAIL_APP_PASSWORD }}
+        run: python greenhouse_private_v3.py restore --destination runtime/private
+      - name: Install Chromium
+        run: python -m playwright install --with-deps chromium
+      - name: Submit only this explicitly approved application
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python greenhouse_pipeline_v3.py submit --packet "runtime/greenhouse/$APP_ID/packet.json" --db applications_v2.json --output "runtime/greenhouse/$APP_ID/live" --approval-comment "$COMMENT_ID"
+      - name: Preserve submission outcome privately
+        if: always()
+        run: |
+          mkdir -p runtime/greenhouse runtime/submission-publish
+          if test -s applications_v2.json; then cp applications_v2.json runtime/greenhouse/applications_v2.json; fi
+          if [ -n "$APPLICATION_PACKET_KEY" ]; then
+            python greenhouse_artifacts_v3.py pack runtime/greenhouse runtime/submission-publish/packets.enc
+          fi
+          python - <<'PY'
+          import json,pathlib
+          p=pathlib.Path('runtime/greenhouse')
+          summaries=[json.loads(f.read_text()) for f in p.rglob('result.public.json')]
+          pathlib.Path('runtime/submission-publish/public-summary.json').write_text(json.dumps({'applications':summaries},indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: greenhouse-submission-${{ github.event.comment.id }}
+          retention-days: 90
+          path: runtime/submission-publish/**
+      - name: Preserve safe application history for future scans
+        if: always()
+        run: |
+          if test -s applications_v2.json; then
+            mkdir -p runtime/legacy
+            python - <<'PY'
+          import json,pathlib
+          data=json.load(open('applications_v2.json'))
+          for app in data['applications'].values():
+              if app.get('confirmation'): app['confirmation']='Employer confirmation retained in encrypted submission artifact'
+              for event in app.get('events',[]):
+                  if event.get('confirmation'): event['confirmation']='Employer confirmation retained in encrypted submission artifact'
+          pathlib.Path('runtime/legacy/applications_v2.json').write_text(json.dumps(data,indent=2))
+          PY
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: application-review-queue
+          retention-days: 90
+          path: runtime/legacy/**
