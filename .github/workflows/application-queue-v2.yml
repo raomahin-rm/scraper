@@ -27,6 +27,8 @@ jobs:
           python rank_v2.py --input v2_jobs.json --output v2_shortlist.json --limit 40
       - name: Prepare draft applications only
         run: python application_queue_v2.py import --shortlist v2_shortlist.json --db applications_v2.json
+      - name: Generate commercial application review packets
+        run: python application_review_packets_v2.py --db applications_v2.json --bank application_answers_v2.json
       - name: Assert no applications were submitted
         run: |
           python - <<'PY'
@@ -44,3 +46,5 @@ jobs:
           path: |
             applications_v2.json
             v2_shortlist.json
+            application_review_packets_v2.json
+            application_review_packets_v2.md
