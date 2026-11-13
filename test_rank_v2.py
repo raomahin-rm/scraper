@@ -55,6 +55,10 @@ class RankingTests(unittest.TestCase):
         a=evaluate(job("Partnerships Manager","Chicago, IL"))[0]
         b=evaluate(job("Partnerships Manager","Miami, FL"))[0]
         self.assertGreater(a["score"],b["score"])
+    def test_munich_country_prefix_not_delaware(self):
+        self.assertEqual(location_class("DE - Munich"),"non_us")
+    def test_revenue_accounting_excluded(self):
+        self.assertEqual(evaluate(job("Lead Revenue Accounting, Technical (Strategic Partnerships)"))[1],"blocked_title")
     def test_foreign_only(self):
         self.assertEqual(location_class("Toronto, Canada"),"non_us")
 
