@@ -162,6 +162,11 @@ jobs:
             cp -r runtime/greenhouse/. runtime/publish/
             find runtime/publish -name '*.png' -delete
           fi
+          python - <<'PY'
+          import json,pathlib
+          summaries=[json.loads(p.read_text()) for p in pathlib.Path('runtime/greenhouse').rglob('result.public.json')]
+          pathlib.Path('runtime/publish/public-summary.json').write_text(json.dumps({'applications':summaries},indent=2))
+          PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:
