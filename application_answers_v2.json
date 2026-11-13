@@ -1,0 +1,84 @@
+{
+  "work_authorization": {
+    "answer": "Yes",
+    "approved": true,
+    "details": "Currently authorized to work in the United States on F-1 post-completion OPT."
+  },
+  "sponsorship": {
+    "answer": "Yes",
+    "approved": true,
+    "details": "Will require employer sponsorship in the future; currently on F-1 post-completion OPT and eligible for a 24-month STEM OPT extension.",
+    "review_note": "Answer employer-specific now/future wording accurately; do not state no sponsorship is ever required."
+  },
+  "current_status": {
+    "answer": "F-1 Post-Completion OPT",
+    "approved": true
+  },
+  "stem_opt": {
+    "answer": "Yes",
+    "approved": true
+  },
+  "salary": {
+    "answer": "$80,000–$100,000 annual base salary; negotiable depending on role, location, scope, and published compensation range.",
+    "approved": true,
+    "min_base_usd": 80000,
+    "max_base_usd": 100000,
+    "customize_by_role": true,
+    "review_note": "If application requires one number, suggest a figure based on employer range and seek user approval; do not auto-reject higher-paying roles."
+  },
+  "start_date": {
+    "answer": "Three weeks after receiving an offer.",
+    "approved": true
+  },
+  "relocation": {
+    "answer": "Yes",
+    "approved": true
+  },
+  "preferred_locations": {
+    "answer": null,
+    "approved": false,
+    "requires_review": true
+  },
+  "years_experience": {
+    "answer": null,
+    "approved": false,
+    "requires_review": true
+  },
+  "revenue_pnl": {
+    "answer": "Yes",
+    "approved": true
+  },
+  "enterprise_accounts_contracts": {
+    "answer": "Yes",
+    "approved": true
+  },
+  "cold_outreach_quota": {
+    "answer": "Yes",
+    "approved": true
+  },
+  "travel": {
+    "answer": "Yes",
+    "approved": true
+  },
+  "default_resume": {
+    "answer": "Commercial Resume",
+    "approved": true,
+    "file_name": "Rao Mahin(6).pdf",
+    "note": "PDF remains private and is not stored in GitHub."
+  },
+  "submission_approval": {
+    "answer": "Every application must be individually reviewed and explicitly approved before submission.",
+    "approved": true,
+    "required": true
+  },
+  "excluded_companies_roles": {
+    "answer": null,
+    "approved": false,
+    "requires_review": true
+  },
+  "_policy": {
+    "unknown_answers": "requires_review",
+    "submission": "never_without_explicit_individual_approval",
+    "source": "User-supplied commercial application questionnaire"
+  }
+}
