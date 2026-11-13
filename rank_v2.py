@@ -95,7 +95,18 @@ def shortlist(jobs, limit=40):
     # Separate review-only geography rather than silently mailing ambiguous locations.
     eligible = [j for j in accepted if j["location_status"] == "us"]
     review = [j for j in accepted if j["location_status"] == "review"]
-    return {"top": eligible[:limit], "review_location": review[:limit],
+    # Diversify alerts without discarding additional eligible jobs from the full pool.
+    company_counts = Counter()
+    diversified = []
+    for job in eligible:
+        company = (job.get("company") or "").strip().casefold()
+        if company_counts[company] >= 3:
+            continue
+        diversified.append(job)
+        company_counts[company] += 1
+        if len(diversified) >= limit:
+            break
+    return {"top": diversified, "review_location": review[:limit],
             "counts": dict(counts), "total_us_matches": len(eligible),
             "total_location_review": len(review)}
 
