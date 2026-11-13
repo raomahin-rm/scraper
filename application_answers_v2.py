@@ -4,9 +4,16 @@ import re
 from pathlib import Path
 
 RULES = {
+ "current_status": [r"current (?:visa|work authorization|immigration) status"],
+ "stem_opt": [r"stem opt",r"24.month stem"],
+ "preferred_locations": [r"preferred (?:work )?locations?",r"which locations? would you consider"],
+ "revenue_pnl": [r"(?:owned|managed).{0,35}(?:revenue|p&l|sales targets?)"],
+ "enterprise_accounts_contracts": [r"managed enterprise accounts",r"negotiated commercial contracts"],
+ "cold_outreach_quota": [r"cold outreach",r"prospecting",r"quota.carrying"],
+ "travel": [r"willing to travel",r"travel for work"],
  "work_authorization": [r"authorized to work",r"legally (?:eligible|permitted) to work",r"right to work"],
  "sponsorship": [r"(?:require|need).{0,40}sponsorship",r"(?:visa|immigration) sponsorship",r"sponsor.{0,30}(?:now|future)"],
- "salary": [r"salary expectation",r"desired (?:salary|compensation|pay)",r"compensation expectation"],
+ "salary": [r"salary expectation",r"desired (?:salary|compensation|pay)",r"compensation expectation",r"expected (?:annual )?(?:base )?salary",r"salary requirements?"],
  "relocation": [r"willing to relocate",r"open to relocat",r"relocation preference"],
  "start_date": [r"earliest (?:start|availability)",r"when can you start",r"available to start"],
  "years_experience": [r"how many years",r"years of (?:relevant )?experience"],
