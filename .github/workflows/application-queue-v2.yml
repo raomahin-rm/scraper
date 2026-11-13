@@ -2,10 +2,28 @@ name: Application automation stages 2 and 3 - safe queue
 
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        type: choice
+        options: [prepare, fill, submit]
+        default: prepare
+      application_id:
+        description: One existing queue ID (required for fill/submit)
+        type: string
+      packet_run_id:
+        description: Run containing the exact reviewed greenhouse-pipeline artifact (submit only)
+        type: string
+      approval_comment_id:
+        description: Owner-authored individual approval comment ID (submit only)
+        type: string
 
 permissions:
-  contents: read
+  contents: write
   actions: read
+
+concurrency:
+  group: greenhouse-application-pipeline
+  cancel-in-progress: false
 
 jobs:
   prepare-queue:
@@ -22,11 +40,8 @@ jobs:
       - run: pip install -r requirements.txt
       - name: Test approval gates and duplicate prevention
         run: python test_application_queue_v2.py && python test_application_answers_v2.py && python test_employer_questions_v2.py && python test_employer_answer_matches_v2.py && python test_scraper_v2.py && python test_rank_v2.py
-      - name: Retrieve and rank jobs
-        run: |
-          python scraper_v2.py --limit 305 --output v2_jobs.json
-          python rank_v2.py --input v2_jobs.json --output v2_shortlist.json --limit 40
       - name: Restore previous application queue when available
+        if: inputs.mode != 'submit'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -38,25 +53,132 @@ jobs:
             if gh run download "$previous_run" --repo "$GITHUB_REPOSITORY" -n application-review-queue -D previous-queue; then
               if [ -s previous-queue/applications_v2.json ]; then
                 cp previous-queue/applications_v2.json applications_v2.json
+                cp previous-queue/v2_shortlist.json v2_shortlist.json
+                cp previous-queue/tailored_application_drafts_v2.json tailored_application_drafts_v2.json
                 echo "Restored application history from run $previous_run"
               fi
             else
-              echo "Previous artifact unavailable; starting a new queue"
+              echo "Previous artifact unavailable; refusing to rebuild history"
+              exit 1
             fi
           else
-            echo "No previous artifact available; starting a new queue"
+            echo "No previous artifact available; refusing to rebuild history"
+            exit 1
           fi
+      - name: Refuse missing application history
+        if: inputs.mode != 'submit'
+        run: test -s applications_v2.json && test -s tailored_application_drafts_v2.json
       - name: Prepare draft applications only
+        if: inputs.mode == 'prepare' 
         run: python application_queue_v2.py import --shortlist v2_shortlist.json --db applications_v2.json
       - name: Generate commercial application review packets
+        if: inputs.mode == 'prepare'
         run: python application_review_packets_v2.py --db applications_v2.json --bank application_answers_v2.json
       - name: Inspect supported employer application questions (read-only)
+        if: inputs.mode == 'prepare'
         run: python employer_questions_v2.py --packets application_review_packets_v2.json --output employer_questions_v2.json
       - name: Match retrieved employer questions to approved answers
+        if: inputs.mode == 'prepare'
         run: python employer_answer_matches_v2.py --questions employer_questions_v2.json --bank application_answers_v2.json
       - name: Draft role-specific motivation and optional cover letters
+        if: inputs.mode == 'prepare'
         run: python tailored_application_drafts_v2.py --packets application_review_packets_v2.json
+      - name: Test Greenhouse approval and browser controls
+        run: |
+          python -m playwright install --with-deps chromium
+          python -m unittest test_greenhouse_pipeline_v3 -v
+          RUN_BROWSER_TESTS=1 python -m unittest test_greenhouse_browser_v3 -v
+      - name: Restore exact reviewed packet for submission
+        if: inputs.mode == 'submit'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACKET_RUN: ${{ inputs.packet_run_id }}
+          APPLICATION_PACKET_KEY: ${{ secrets.APPLICATION_PACKET_KEY }}
+        run: |
+          [[ "$PACKET_RUN" =~ ^[0-9]+$ ]]
+          gh run download "$PACKET_RUN" --repo "$GITHUB_REPOSITORY" -n greenhouse-pipeline -D runtime/greenhouse
+          if test -s runtime/greenhouse/packets.enc; then
+            python greenhouse_artifacts_v3.py unpack runtime/greenhouse/packets.enc runtime/greenhouse
+          fi
+          cp runtime/greenhouse/applications_v2.json applications_v2.json
+      - name: Prepare private materials when configured
+        if: inputs.mode != 'submit'
+        env:
+          CONTACT_JSON: ${{ secrets.APPLICATION_CONTACT_JSON }}
+          RESUME_BASE64: ${{ secrets.APPLICATION_RESUME_BASE64 }}
+          OVERRIDES_JSON: ${{ secrets.APPLICATION_OVERRIDES_JSON }}
+          APPLICATION_PACKET_KEY: ${{ secrets.APPLICATION_PACKET_KEY }}
+        run: |
+          mkdir -p runtime/private runtime/source
+          python - <<'PY'
+          import os,json,base64,pathlib
+          if any(os.environ.get(k) for k in ('CONTACT_JSON','RESUME_BASE64','OVERRIDES_JSON')) and not os.environ.get('APPLICATION_PACKET_KEY'):
+              raise SystemExit('Private application inputs require APPLICATION_PACKET_KEY encryption')
+          p=pathlib.Path('runtime/private')
+          for key,name in [('CONTACT_JSON','contact.json'),('OVERRIDES_JSON','overrides.json')]:
+              (p/name).write_text(json.dumps(json.loads(os.environ.get(key) or '{}')))
+          if os.environ.get('RESUME_BASE64'):
+              (p/'resume.pdf').write_bytes(base64.b64decode(os.environ['RESUME_BASE64'],validate=True))
+          PY
+          cp applications_v2.json tailored_application_drafts_v2.json runtime/source/
+      - name: Screen descriptions and prepare employer-specific packets
+        if: inputs.mode != 'submit'
+        shell: bash
+        run: |
+          args=()
+          if test -s runtime/private/resume.pdf; then args+=(--resume runtime/private/resume.pdf); fi
+          python greenhouse_pipeline_v3.py prepare --source runtime/source --output runtime/greenhouse --contact-json runtime/private/contact.json --overrides-json runtime/private/overrides.json "${args[@]}"
+          cp runtime/greenhouse/applications_v2.json applications_v2.json
+      - name: Live form prefill without submission
+        if: inputs.mode == 'fill'
+        env:
+          APP_ID: ${{ inputs.application_id }}
+        run: |
+          [[ "$APP_ID" =~ ^[a-f0-9]{16}$ ]]
+          python greenhouse_pipeline_v3.py fill --packet "runtime/greenhouse/$APP_ID/packet.json" --db applications_v2.json --output "runtime/greenhouse/$APP_ID/live"
+      - name: Submit exactly one individually approved application
+        if: inputs.mode == 'submit'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APP_ID: ${{ inputs.application_id }}
+          COMMENT_ID: ${{ inputs.approval_comment_id }}
+          RESUME_BASE64: ${{ secrets.APPLICATION_RESUME_BASE64 }}
+        run: |
+          [[ "$APP_ID" =~ ^[a-f0-9]{16}$ ]]
+          [[ "$COMMENT_ID" =~ ^[0-9]+$ ]]
+          mkdir -p runtime/private
+          python - <<'PY'
+          import base64,os,pathlib
+          if os.environ.get('RESUME_BASE64'):
+              pathlib.Path('runtime/private/resume.pdf').write_bytes(base64.b64decode(os.environ['RESUME_BASE64'],validate=True))
+          PY
+          python greenhouse_pipeline_v3.py submit --packet "runtime/greenhouse/$APP_ID/packet.json" --db applications_v2.json --output "runtime/greenhouse/$APP_ID/live" --approval-comment "$COMMENT_ID"
+      - name: Preserve Greenhouse outcomes
+        if: always()
+        run: |
+          mkdir -p runtime/greenhouse
+          if test -s applications_v2.json; then cp applications_v2.json runtime/greenhouse/applications_v2.json; fi
+      - name: Encrypt private review artifacts
+        if: always()
+        env:
+          APPLICATION_PACKET_KEY: ${{ secrets.APPLICATION_PACKET_KEY }}
+        run: |
+          mkdir -p runtime/publish
+          if [ -n "$APPLICATION_PACKET_KEY" ]; then
+            python greenhouse_artifacts_v3.py pack runtime/greenhouse runtime/publish/packets.enc
+          else
+            cp -r runtime/greenhouse/. runtime/publish/
+            find runtime/publish -name '*.png' -delete
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: greenhouse-pipeline
+          retention-days: 90
+          path: |
+            runtime/publish/**
       - name: Assert no applications were submitted
+        if: inputs.mode != 'submit' 
         run: |
           python - <<'PY'
           import json
@@ -68,6 +190,7 @@ jobs:
           print('This workflow performed no submissions.')
           PY
       - uses: actions/upload-artifact@v4
+        if: always() && inputs.mode != 'submit'
         with:
           name: application-review-queue
           retention-days: 90
