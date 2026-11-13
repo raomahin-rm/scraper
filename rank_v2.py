@@ -24,6 +24,7 @@ BLOCK = [
     r"\b(engineer|developer|scientist|designer|recruiter|attorney|counsel|accountant)\b",
     r"\b(product manager|program manager|project manager)\b",
     r"\b(marketing|advertising|ad sales|media buying|procurement analyst)\b",
+    r"\b(technology sourcing|strategic sourcing|procurement)\b",
     r"\b(assistant|coordinator|administrator)\b",
 ]
 # Conservative: unknown geography goes to review rather than falsely treated as US.
