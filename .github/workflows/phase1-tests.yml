@@ -26,6 +26,6 @@ jobs:
           python-version: "3.11"
       - run: pip install -r requirements.txt
       - name: Run offline regression tests
-        run: python -m unittest discover -p "test_*.py" -v
+        run: python test_offline.py && python test_phase1.py
       - name: Confirm historical state remains unchanged
         run: git diff --exit-code -- seen_jobs.json
