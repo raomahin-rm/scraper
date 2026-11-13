@@ -23,9 +23,10 @@ BLOCK = [
     r"\binside sales\b|\bretail sales\b|\bdoor.to.door\b|\bfield sales representative\b",
     r"\b(engineer|developer|scientist|designer|recruiter|attorney|counsel|accountant)\b",
     r"\b(product manager|program manager|project manager)\b",
+    r"\b(technical program manager|engineering manager|technical project manager|technical delivery manager)\b",
     r"\b(marketing|advertising|ad sales|media buying|procurement analyst)\b",
     r"\b(technology sourcing|strategic sourcing|procurement)\b",
-    r"\b(assistant|coordinator|administrator)\b",
+    r"\b(coordinator|administrator)\b",
 ]
 # Conservative: unknown geography goes to review rather than falsely treated as US.
 US_STATES = r"\b(?:AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|DC)\b"
@@ -50,6 +51,8 @@ def evaluate(job):
     if not title:
         return None, "no_title"
     t = title.lower()
+    if re.search(r"\b(technical account manager|technical customer success|technical partnerships? manager)\b",t) and not re.search(r"enterprise|commercial|revenue|sales|renewals?|expansion|partnerships?", (job.get("description") or "").lower()):
+        return None, "technical_fit_unverified"
     if any(re.search(p, t, re.I) for p in BLOCK):
         return None, "blocked_title"
     matches = [(score, label) for p, score, label in INCLUDE if re.search(p, t, re.I)]
@@ -59,6 +62,10 @@ def evaluate(job):
     if level == "non_us":
         return None, "non_us"
     score, track = max(matches)
+    if re.search(r"\b(assistant|associate)\s+(?:manager|account manager|partnerships? manager|category manager)",t):
+        score += 3
+    if re.search(r"\b(manager|management)\b",t):
+        score += 6
     if re.search(r"\b(senior|sr\.?|principal|staff)\b", t):
         score += 8
     if re.search(r"\b(director|vice president|\bvp\b|chief|head of)\b", t):
@@ -74,7 +81,7 @@ def evaluate(job):
     if level == "review":
         score -= 15
     result = dict(job)
-    result.update(score=score, track=track, location_status=level)
+    result.update(score=score, track=track, location_status=level, fit_reason=f"{track}; commercial title and level screened", cover_letter_decision="review_required_or_high_fit_optional")
     return result, "accepted"
 
 def role_key(job):
