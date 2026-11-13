@@ -68,6 +68,6 @@ body, text = js.build_email(top, stats, ["greenhouse/foo: 404 Not Found"])
 assert "foo" in body
 js.build_csv(top)
 assert sum(1 for j in top if j.company == "Lyft") == 1
-assert sum(len(j.alt_uids) for j in top if j.company == "Lyft") == 2
+assert stats["merged"] == 1  # Two same-title location variants were merged before ranking
 js.print_debug(jobs, top)
 print("OK")
