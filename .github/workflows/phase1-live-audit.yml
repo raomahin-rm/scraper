@@ -22,9 +22,12 @@ jobs:
         run: python audit_feeds.py --limit 80 --delay 0.5
       - name: Retrieve replacement scraper sample (read-only, no email)
         run: python scraper_v2.py --limit 80 --output v2_jobs.json
+      - name: Rank replacement scraper jobs (preview only)
+        run: python rank_v2.py --input v2_jobs.json --output v2_shortlist.json --limit 40
       - uses: actions/upload-artifact@v4
         with:
           name: company-feed-audit
           path: |
             feed_audit.csv
             v2_jobs.json
+            v2_shortlist.json
