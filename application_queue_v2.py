@@ -54,7 +54,11 @@ def save(path,data):
 def import_jobs(data,jobs):
     created=0
     for job in jobs:
-        uid=identity(job)
+        try:
+            uid=identity(job)
+        except ValueError:
+            # Bad source links are not actionable; skip rather than abort the batch.
+            continue
         if uid in data["applications"]: continue
         data["applications"][uid]={
             "id":uid,"company":job.get("company",""),"title":job.get("title",""),
