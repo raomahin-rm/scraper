@@ -24,6 +24,8 @@ jobs:
         run: python scraper_v2.py --limit 80 --output v2_jobs.json
       - name: Rank replacement scraper jobs (preview only)
         run: python rank_v2.py --input v2_jobs.json --output v2_shortlist.json --limit 40
+      - name: Render daily email preview (no sending)
+        run: python email_preview_v2.py --input v2_shortlist.json --output v2_email_preview.html
       - uses: actions/upload-artifact@v4
         with:
           name: company-feed-audit
@@ -31,3 +33,4 @@ jobs:
             feed_audit.csv
             v2_jobs.json
             v2_shortlist.json
+            v2_email_preview.html
