@@ -8,6 +8,8 @@ on:
       - "job_scraper.py"
       - "scraper_v2.py"
       - "rank_v2.py"
+      - "history_v2.py"
+      - "email_preview_v2.py"
       - "workday.py"
       - "config.py"
       - "companies.csv"
@@ -28,6 +30,6 @@ jobs:
           python-version: "3.11"
       - run: pip install -r requirements.txt
       - name: Run offline regression tests
-        run: python test_offline.py && python test_phase1.py && python test_scraper_v2.py && python test_rank_v2.py
+        run: python test_offline.py && python test_phase1.py && python test_scraper_v2.py && python test_rank_v2.py && python test_history_v2.py
       - name: Confirm historical state remains unchanged
         run: git diff --exit-code -- seen_jobs.json
