@@ -41,4 +41,16 @@ class BrowserTests(unittest.TestCase):
             self.assertEqual(page.locator('#selected').inner_text(),'Yes')
             browser.close()
 
+    def test_country_abbreviation_requires_selected_option_readback(self):
+        with sync_playwright() as p:
+            kwargs={'headless':True}
+            if os.environ.get('CHROMIUM_PATH'):kwargs['executable_path']=os.environ['CHROMIUM_PATH']
+            browser=p.chromium.launch(**kwargs);page=browser.new_page()
+            page.set_content('''<div class="select__control"><span>+1</span>
+              <input id="country" role="combobox" readonly onclick="document.getElementById('choices').hidden=false">
+              <div id="choices" hidden><div role="option" aria-selected="false" onclick="this.setAttribute('aria-selected','true');document.getElementById('choices').hidden=true">United States +1</div></div></div>''')
+            self.assertTrue(fill_value(page,{'name':'country','value':'United States +1'}))
+            self.assertEqual(page.get_by_role('option',name='United States +1').get_attribute('aria-selected'),'true')
+            browser.close()
+
 if __name__=='__main__':unittest.main()

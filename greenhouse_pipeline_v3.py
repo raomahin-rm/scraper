@@ -268,8 +268,17 @@ def fill_value(page, answer):
         option.click()
         # React Select keeps chosen label beside input, whose value is cleared.
         selected = loc.locator("xpath=ancestor::*[contains(@class,'select__control')][1]")
-        if selected.count() != 1 or str(value) not in selected.inner_text():
-            raise ValueError("Dropdown readback mismatch: " + name)
+        if selected.count() != 1:
+            raise ValueError("Dropdown readback container missing: " + name)
+        if str(value) not in selected.inner_text():
+            # Country controls display only a flag and dial code. Verify the
+            # exact option remains selected rather than guessing from +1.
+            loc.click()
+            chosen = page.get_by_role("option", name=str(value), exact=True)
+            chosen.wait_for(timeout=5000)
+            if chosen.get_attribute("aria-selected") != "true":
+                raise ValueError("Dropdown readback mismatch: " + name)
+            loc.press("Escape")
     else:
         loc.fill(str(value))
         if loc.input_value() != str(value):
