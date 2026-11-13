@@ -20,7 +20,11 @@ jobs:
       - run: pip install -r requirements.txt
       - name: Audit first 80 configured company entries (read-only)
         run: python audit_feeds.py --limit 80 --delay 0.5
+      - name: Retrieve replacement scraper sample (read-only, no email)
+        run: python scraper_v2.py --limit 80 --output v2_jobs.json
       - uses: actions/upload-artifact@v4
         with:
           name: company-feed-audit
-          path: feed_audit.csv
+          path: |
+            feed_audit.csv
+            v2_jobs.json
