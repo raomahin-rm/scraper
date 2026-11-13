@@ -33,6 +33,8 @@ jobs:
         run: python employer_questions_v2.py --packets application_review_packets_v2.json --output employer_questions_v2.json
       - name: Match retrieved employer questions to approved answers
         run: python employer_answer_matches_v2.py --questions employer_questions_v2.json --bank application_answers_v2.json
+      - name: Draft role-specific motivation and optional cover letters
+        run: python tailored_application_drafts_v2.py --packets application_review_packets_v2.json
       - name: Assert no applications were submitted
         run: |
           python - <<'PY'
@@ -54,3 +56,4 @@ jobs:
             application_review_packets_v2.md
             employer_questions_v2.json
             employer_answer_matches_v2.json
+            tailored_application_drafts_v2.json
