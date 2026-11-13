@@ -67,6 +67,7 @@ assert any(j.company == "Oldapplied Co" and "applied here" in j.flags for j in t
 body, text = js.build_email(top, stats, ["greenhouse/foo: 404 Not Found"])
 assert "foo" in body
 js.build_csv(top)
-assert sum(1 for j in top if j.company == "Lyft") == 3
+assert sum(1 for j in top if j.company == "Lyft") == 1
+assert sum(len(j.alt_uids) for j in top if j.company == "Lyft") == 2
 js.print_debug(jobs, top)
 print("OK")
