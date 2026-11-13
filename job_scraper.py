@@ -20,6 +20,7 @@ from functools import partial
 from datetime import date, datetime, timedelta, timezone
 from email.message import EmailMessage
 from pathlib import Path
+from urllib.parse import urlsplit, parse_qsl, urlencode
 from zoneinfo import ZoneInfo
 
 import requests
@@ -79,6 +80,27 @@ def clean(text):
 
 def norm(s):
     return re.sub(r"[^a-z0-9]", "", (s or "").lower())
+
+
+def canonical_url(url):
+    """Stable URL identity without tracking parameters, fragments or locale noise."""
+    parts = urlsplit(url or "")
+    host = parts.netloc.lower().removeprefix("www.")
+    path = re.sub(r"/+(?:en-US|en-GB)/", "/", parts.path, flags=re.I).rstrip("/")
+    query = urlencode(sorted((k, v) for k, v in parse_qsl(parts.query)
+                             if k.lower() not in {"utm_source", "utm_medium", "utm_campaign",
+                                                   "utm_content", "utm_term", "ref", "source"}))
+    return f"{host}{path.lower()}" + (f"?{query}" if query else "")
+
+
+def job_identities(job):
+    """Preserve ATS requisition IDs and canonical URLs; fallback for aggregators only."""
+    keys = {job.uid}
+    if job.url:
+        keys.add("url:" + canonical_url(job.url))
+    if job.source not in ATS_SOURCES:
+        keys.add("role:" + ":".join((norm(job.company), norm(job.title), norm(job.location))))
+    return keys
 
 
 def parse_iso(s):
@@ -425,6 +447,8 @@ def location_info(loc, desc=""):
     l = loc.lower()
     if any(c in l for c in config.TIER1_CITIES) or re.search(r",\s*(TX|MA)\b", loc):
         return "tier1", config.LOC_POINTS_TIER1
+    if re.fullmatch(r"\s*(remote|work from home|wfh)\s*", l):
+        return "remote", config.LOC_POINTS_REMOTE
     if (US_RE.search(loc) or STATE_RE.search(loc) or STATE_NAMES_RE.search(loc)
             or any(c in l for c in US_CITIES)):
         return "us", (config.LOC_POINTS_REMOTE if "remote" in l else config.LOC_POINTS_OTHER_US)
@@ -633,7 +657,7 @@ def shortlist(jobs, seen, applied, sponsors=None):
         if not track or title_blocked(j.title):
             drop(j, "title", "title or level not a match")
             continue
-        if j.uid in seen:
+        if any(k in seen for k in job_identities(j)):
             drop(j, "seen", "already emailed before")
             continue
         if (norm(j.company), norm(j.title)) in exact or j.url in exact:
@@ -649,7 +673,7 @@ def shortlist(jobs, seen, applied, sponsors=None):
         if config.DROP_NO_SPONSORSHIP and sponsor_signal(j.description) == "no":
             drop(j, "no_sponsor", "says no sponsorship")
             continue
-        key = (norm(j.company), norm(j.title), norm(j.location))
+        key = canonical_url(j.url) if j.url else (norm(j.company), norm(j.title), norm(j.location))
         if key in keys:
             drop(j, "dupe", "duplicate")
             continue
@@ -914,9 +938,7 @@ def load_seen():
 
 
 def save_seen(seen):
-    cutoff = (NOW - timedelta(days=90)).isoformat()
-    seen = {k: v for k, v in seen.items() if v >= cutoff}
-    SEEN_FILE.write_text(json.dumps(seen, indent=0))
+    SEEN_FILE.write_text(json.dumps(seen, indent=0, sort_keys=True))
 
 
 def load_applied():
@@ -994,7 +1016,7 @@ def main():
 
     send_email(subject, body, text, build_csv(top))
     for j in top + rejected:
-        for uid in [j.uid] + j.alt_uids:
+        for uid in job_identities(j) | set(j.alt_uids):
             seen[uid] = NOW.isoformat()
     save_seen(seen)
     print(f"Sent {len(top)} roles.")
