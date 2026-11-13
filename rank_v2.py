@@ -77,6 +77,15 @@ def evaluate(job):
     result.update(score=score, track=track, location_status=level)
     return result, "accepted"
 
+def role_key(job):
+    """Same company and normalized role, regardless of location or requisition."""
+    company = re.sub(r"[^a-z0-9]+", " ", (job.get("company") or "").casefold()).strip()
+    title = (job.get("title") or "").casefold()
+    title = re.sub(r"\\b(sr\\.?|senior)\\b", "senior", title)
+    title = re.sub(r"\\s*\\([^)]*(?:remote|hybrid|chicago|new york|san francisco|los angeles|dallas|usa|united states)[^)]*\\)", "", title)
+    title = re.sub(r"\\s*[-–|]\\s*(?:remote|hybrid|chicago|new york|san francisco|los angeles|dallas|usa|united states)$", "", title)
+    return company, re.sub(r"[^a-z0-9]+", " ", title).strip()
+
 def shortlist(jobs, limit=40):
     counts = Counter()
     accepted = []
@@ -95,10 +104,20 @@ def shortlist(jobs, limit=40):
     # Separate review-only geography rather than silently mailing ambiguous locations.
     eligible = [j for j in accepted if j["location_status"] == "us"]
     review = [j for j in accepted if j["location_status"] == "review"]
-    # Diversify alerts without discarding additional eligible jobs from the full pool.
+    # Keep the highest-scoring posting of equivalent roles across locations/IDs.
+    seen_roles = set()
+    unique_eligible = []
+    for job in eligible:
+        key = role_key(job)
+        if key in seen_roles:
+            counts["same_role_different_posting"] += 1
+            continue
+        seen_roles.add(key)
+        unique_eligible.append(job)
+    # Diversify alerts without discarding other distinct roles.
     company_counts = Counter()
     diversified = []
-    for job in eligible:
+    for job in unique_eligible:
         company = (job.get("company") or "").strip().casefold()
         if company_counts[company] >= 2:
             continue
@@ -107,7 +126,7 @@ def shortlist(jobs, limit=40):
         if len(diversified) >= limit:
             break
     return {"top": diversified, "review_location": review[:limit],
-            "counts": dict(counts), "total_us_matches": len(eligible),
+            "counts": dict(counts), "total_us_matches": len(unique_eligible),
             "total_location_review": len(review)}
 
 def main():
