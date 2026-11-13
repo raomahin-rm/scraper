@@ -1,9 +1,6 @@
 name: Daily job scan
 
 on:
-  schedule:
-    # 12:00 UTC = 7am Chicago in summer, 6am in winter
-    - cron: "0 12 * * *"
   workflow_dispatch:
 
 permissions:
