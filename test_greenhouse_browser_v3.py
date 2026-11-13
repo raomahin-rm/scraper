@@ -20,9 +20,10 @@ class BrowserTests(unittest.TestCase):
               <input id="unexpected" required><button type="submit">Submit application</button></form>''')
             with tempfile.TemporaryDirectory() as d:
                 file=Path(d)/'resume.txt';file.write_text('Test fixture only')
-                answers=[{'name':'first_name','value':'Rao'},{'name':'sponsor','value':'Yes'},{'name':'consent','value':True},{'name':'resume','value':str(file)}]
+                answers=[{'name':'absent_optional','value':'Chicago','type':'dom','required':False},{'name':'first_name','value':'Rao'},{'name':'sponsor','value':'Yes'},{'name':'consent','value':True},{'name':'resume','value':str(file)}]
                 result=fill_form(page,{'answers':answers,'missing_required':[]})
                 self.assertEqual(result['errors'],[])
+                self.assertEqual(result['skipped_unavailable_optional_fields'],['absent_optional'])
                 self.assertEqual(set(result['filled_fields']),{'first_name','sponsor','consent','resume'})
                 self.assertEqual(result['unresolved_live_fields'][0]['id'],'unexpected')
                 self.assertIsNone(page.locator('body').get_attribute('data-submitted'))

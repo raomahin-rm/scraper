@@ -134,7 +134,7 @@ def prepare(app, job, bank, previous, profile, contact=None, overrides=None, doc
     return {"version": VERSION, "id": app["id"], "company": app["company"], "title": job["title"], "url": app["url"],
             "job_fingerprint": job_fingerprint(job), "screening": screen(app, job),
             "answers": answers, "documents": docs, "missing_required": pending,
-            "drafts": tailor(app, job, previous, profile), "prepared_at": now(),
+            "drafts": tailor(dict(app, title=job["title"]), job, previous, profile), "prepared_at": now(),
             "status": "needs_review", "submitted": False}
 
 def approval_digest(packet):
@@ -289,8 +289,11 @@ def live_fields(page):
     return page.locator('form input, form select, form textarea, [data-testid="application-form"] input').evaluate_all('''es=>es.filter(e=>e.id && e.type!=='hidden' && e.type!=='file' && !e.id.startsWith('g-recaptcha')).map(e=>({id:e.id,type:e.type,required:e.required||e.getAttribute('aria-required')==='true',label:e.labels?.[0]?.innerText||e.getAttribute('aria-label')||e.id}))''')
 
 def fill_form(page, packet, defer_files=False):
-    errors, filled, deferred = [], [], []
+    errors, filled, deferred, skipped = [], [], [], []
     for answer in packet["answers"]:
+        if answer.get("type") == "dom" and not answer.get("required") and not control(page, answer["name"]).count():
+            skipped.append(answer["name"])
+            continue
         if defer_files and answer.get("type") == "input_file" and answer.get("value"):
             deferred.append(answer["name"])
             continue
@@ -302,7 +305,7 @@ def fill_form(page, packet, defer_files=False):
             errors.append({"field": answer["name"], "error_type": type(exc).__name__})
     known = {a["name"] for a in packet["answers"] if a.get("value") is not None}
     missing = [f for f in live_fields(page) if f["required"] and f["id"] not in known]
-    return {"filled_fields": filled, "deferred_document_uploads": deferred, "errors": errors, "unresolved_live_fields": missing,
+    return {"filled_fields": filled, "deferred_document_uploads": deferred, "skipped_unavailable_optional_fields": skipped, "errors": errors, "unresolved_live_fields": missing,
             "missing_required": packet["missing_required"], "submitted": False}
 
 def allow_preview_request(method, url, documents):
@@ -420,8 +423,12 @@ def batch(source, output, contact=None, overrides=None, documents=None):
             continue
         try:
             job = fetch_job(app["url"])
+            app_overrides = dict((overrides or {}).get(app["id"], {}))
+            app_documents = app_overrides.pop("_documents", {})
+            if not isinstance(app_documents, dict) or not set(app_documents).issubset({"resume", "cover_letter"}):
+                raise ValueError("Application documents must map resume/cover_letter to private files")
             packet = prepare(app, job, bank, previous.get(app["id"], {}), profile, contact,
-                             (overrides or {}).get(app["id"], {}), documents)
+                             app_overrides, {**(documents or {}), **app_documents})
             folder = output / app["id"]
             folder.mkdir(parents=True, exist_ok=True)
             save(folder / "packet.json", packet)
