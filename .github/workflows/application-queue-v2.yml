@@ -20,7 +20,7 @@ jobs:
           cache: pip
       - run: pip install -r requirements.txt
       - name: Test approval gates and duplicate prevention
-        run: python test_application_queue_v2.py && python test_scraper_v2.py && python test_rank_v2.py
+        run: python test_application_queue_v2.py && python test_application_answers_v2.py && python test_scraper_v2.py && python test_rank_v2.py
       - name: Retrieve and rank jobs
         run: |
           python scraper_v2.py --limit 305 --output v2_jobs.json
