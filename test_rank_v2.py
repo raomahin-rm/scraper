@@ -11,6 +11,18 @@ class RankingTests(unittest.TestCase):
         self.assertEqual(result["location_status"],"us")
     def test_account_management(self):
         self.assertIsNotNone(evaluate(job("Enterprise Account Manager"))[0])
+    def test_assistant_partnerships_manager(self):
+        self.assertEqual(evaluate(job("Assistant Partnerships Manager"))[1],"accepted")
+    def test_associate_account_manager(self):
+        self.assertEqual(evaluate(job("Associate Account Manager"))[1],"accepted")
+    def test_technical_account_without_evidence(self):
+        self.assertEqual(evaluate(job("Technical Account Manager"))[1],"technical_fit_unverified")
+    def test_technical_account_with_commercial_evidence(self):
+        j=job("Technical Account Manager")
+        j["description"]="Manage enterprise renewals and commercial expansion."
+        self.assertEqual(evaluate(j)[1],"accepted")
+    def test_reject_engineering_management(self):
+        self.assertEqual(evaluate(job("Engineering Manager, Partnerships"))[1],"blocked_title")
     def test_reject_inside_sales(self):
         self.assertEqual(evaluate(job("Inside Sales Manager"))[1],"blocked_title")
     def test_reject_engineering(self):
