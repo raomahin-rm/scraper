@@ -22,15 +22,19 @@ class RankingTests(unittest.TestCase):
         self.assertEqual(len(result["top"]),0)
         self.assertEqual(len(result["review_location"]),1)
     def test_max_two_jobs_per_company(self):
-        jobs = [job("Senior Strategic Partnerships Manager", company="A", uid=str(i)) for i in range(6)]
-        jobs += [job("Senior Strategic Partnerships Manager", company="B", uid="b"+str(i)) for i in range(4)]
+        jobs = [job("Senior Strategic Partnerships Manager " + str(i), company="A", uid=str(i)) for i in range(6)]
+        jobs += [job("Senior Strategic Partnerships Manager " + str(i), company="B", uid="b"+str(i)) for i in range(4)]
         result = shortlist(jobs, limit=10)
         self.assertEqual(len(result["top"]), 4)
         self.assertEqual(sum(j["company"] == "A" for j in result["top"]), 2)
         self.assertEqual(sum(j["company"] == "B" for j in result["top"]), 2)
         self.assertEqual(result["total_us_matches"], 10)
-    def test_distinct_requisitions_kept(self):
+    def test_same_role_across_requisitions_suppressed(self):
         result=shortlist([job("Partnerships Manager",uid="1"),job("Partnerships Manager",uid="2")])
+        self.assertEqual(result["total_us_matches"],1)
+        self.assertEqual(result["counts"]["same_role_different_posting"],1)
+    def test_different_specializations_preserved(self):
+        result=shortlist([job("Senior Partnerships Manager, Payments",uid="1"),job("Senior Partnerships Manager, Grocery",uid="2")])
         self.assertEqual(result["total_us_matches"],2)
     def test_same_id_dedup(self):
         result=shortlist([job("Partnerships Manager"),job("Partnerships Manager")])
