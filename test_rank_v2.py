@@ -21,6 +21,14 @@ class RankingTests(unittest.TestCase):
         result=shortlist([job("Partnerships Manager","Remote")])
         self.assertEqual(len(result["top"]),0)
         self.assertEqual(len(result["review_location"]),1)
+    def test_max_three_jobs_per_company(self):
+        jobs = [job("Senior Strategic Partnerships Manager", company="A", uid=str(i)) for i in range(6)]
+        jobs += [job("Senior Strategic Partnerships Manager", company="B", uid="b"+str(i)) for i in range(4)]
+        result = shortlist(jobs, limit=10)
+        self.assertEqual(len(result["top"]), 6)
+        self.assertEqual(sum(j["company"] == "A" for j in result["top"]), 3)
+        self.assertEqual(sum(j["company"] == "B" for j in result["top"]), 3)
+        self.assertEqual(result["total_us_matches"], 10)
     def test_distinct_requisitions_kept(self):
         result=shortlist([job("Partnerships Manager",uid="1"),job("Partnerships Manager",uid="2")])
         self.assertEqual(result["total_us_matches"],2)
