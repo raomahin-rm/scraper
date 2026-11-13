@@ -20,7 +20,7 @@ jobs:
           cache: pip
       - run: pip install -r requirements.txt
       - name: Test approval gates and duplicate prevention
-        run: python test_application_queue_v2.py && python test_application_answers_v2.py && python test_employer_questions_v2.py && python test_scraper_v2.py && python test_rank_v2.py
+        run: python test_application_queue_v2.py && python test_application_answers_v2.py && python test_employer_questions_v2.py && python test_employer_answer_matches_v2.py && python test_scraper_v2.py && python test_rank_v2.py
       - name: Retrieve and rank jobs
         run: |
           python scraper_v2.py --limit 305 --output v2_jobs.json
@@ -31,6 +31,8 @@ jobs:
         run: python application_review_packets_v2.py --db applications_v2.json --bank application_answers_v2.json
       - name: Inspect supported employer application questions (read-only)
         run: python employer_questions_v2.py --packets application_review_packets_v2.json --output employer_questions_v2.json
+      - name: Match retrieved employer questions to approved answers
+        run: python employer_answer_matches_v2.py --questions employer_questions_v2.json --bank application_answers_v2.json
       - name: Assert no applications were submitted
         run: |
           python - <<'PY'
@@ -51,3 +53,4 @@ jobs:
             application_review_packets_v2.json
             application_review_packets_v2.md
             employer_questions_v2.json
+            employer_answer_matches_v2.json
