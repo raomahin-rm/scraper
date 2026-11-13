@@ -8,7 +8,7 @@ Via,greenhouse,via,,,,,unverified,
 Lyft,greenhouse,lyft,,,,,unverified,
 Brex,greenhouse,brex,,,,,unverified,
 Gusto,greenhouse,gusto,,,,,unverified,
-Airwallex,manual,,,,,https://www.airwallex.com/careers,,Greenhouse feed returned 404
+Airwallex,ashby,airwallex,,,,https://www.airwallex.com/careers,verified,Live ATS endpoint confirmed in discovery run 43379793467
 Block,greenhouse,block,,,,,unverified,
 Samsara,greenhouse,samsara,,,,,unverified,
 Flexport,greenhouse,flexport,,,,,unverified,
@@ -32,7 +32,7 @@ Airbnb,greenhouse,airbnb,,,,,unverified,
 Etsy,manual,,,,,https://careers.etsy.com,,Greenhouse feed returned 404
 Turo,manual,,,,,https://turo.com/us/en/careers,,Greenhouse feed returned 404
 Opendoor,manual,,,,,https://www.opendoor.com/careers,,Greenhouse feed returned 404
-Thumbtack,manual,,,,,https://www.thumbtack.com/careers,,Greenhouse feed returned 404
+Thumbtack,ashby,thumbtack,,,,https://www.thumbtack.com/careers,verified,Live ATS endpoint confirmed in discovery run 43379793467
 project44,greenhouse,project44,,,,,unverified,
 Warby Parker,manual,,,,,https://www.warbyparker.com/careers,,Greenhouse feed returned 404
 Sweetgreen,greenhouse,sweetgreen,,,,,unverified,
@@ -49,7 +49,7 @@ Elastic,greenhouse,elastic,,,,,unverified,
 Cloudflare,greenhouse,cloudflare,,,,,unverified,
 Toast,greenhouse,toast,,,,,unverified,
 PagerDuty,greenhouse,pagerduty,,,,,unverified,
-Amplitude,manual,,,,,https://amplitude.com/careers,,Greenhouse feed returned 404
+Amplitude,ashby,amplitude,,,,https://amplitude.com/careers,verified,Live ATS endpoint confirmed in discovery run 43379793467
 Braze,greenhouse,braze,,,,,unverified,
 Fivetran,greenhouse,fivetran,,,,,unverified,
 Airtable,greenhouse,airtable,,,,,unverified,
@@ -159,7 +159,7 @@ Newell Brands,workday,,newellbrands,,,,unverified,
 Energizer,workday,,energizerholdings,,,,unverified,
 Helen of Troy,workday,,helenoftroy,,,,unverified,
 Revlon,workday,,revlon,,,,unverified,
-Elf Beauty,workday,,elfbeauty,,,,unverified,
+Elf Beauty,lever,elfbeauty,,,,,verified,Live ATS endpoint confirmed in discovery run 43379793467
 Herbalife,workday,,herbalife,,,,unverified,
 Kroger,workday,,kroger,,,,unverified,
 Best Buy,workday,,bestbuy,,,,unverified,
@@ -180,12 +180,12 @@ Sally Beauty,workday,,sallybeauty,,,,unverified,
 Advance Auto Parts,workday,,advanceautoparts,,,,unverified,
 AutoZone,workday,,autozone,,,,unverified,
 O'Reilly Auto Parts,workday,,oreillyauto,,,,unverified,
-Carvana,workday,,carvana,,,,unverified,
+Carvana,greenhouse,carvana,,,,,verified,Live ATS endpoint confirmed in discovery run 43379793467
 CarMax,workday,,carmax,,,,unverified,
 Wayfair Partners,workday,,wayfair,,,,unverified,
 Overstock (Beyond),workday,,overstock,,,,unverified,
 Mattel,workday,,mattel,,,,unverified,
-Hasbro,workday,,hasbro,,,,unverified,
+Hasbro,greenhouse,hasbro,,,,,verified,Live ATS endpoint confirmed in discovery run 43379793467
 VF Corp,workday,,vfc,,,,unverified,
 PVH,workday,,pvh,,,,unverified,
 Hanesbrands,workday,,hanesbrands,,,,unverified,
@@ -206,7 +206,7 @@ Discover,workday,,discover,,,,unverified,
 American Express,workday,,aexp,,,,unverified,
 Global Payments,workday,,globalpayments,,,,unverified,
 Fleetcor (Corpay),workday,,fleetcor,,,,unverified,
-Western Union,workday,,westernunion,,,,unverified,
+Western Union,greenhouse,westernunion,,,,,verified,Live ATS endpoint confirmed in discovery run 43379793467
 Block (Square),workday,,square,,,,unverified,
 Jack Henry,workday,,jackhenry,,,,unverified,
 Equifax,workday,,equifax,,,,unverified,
@@ -270,7 +270,7 @@ Microsoft,manual,,,,,https://careers.microsoft.com,,
 Meta,manual,,,,,https://www.metacareers.com,,
 Apple,manual,,,,,https://jobs.apple.com,,
 Uber,manual,,,,,https://www.uber.com/us/en/careers/,,
-LinkedIn,manual,,,,,https://careers.linkedin.com,,
+LinkedIn,lever,linkedin,,,,https://careers.linkedin.com,verified,Live ATS endpoint confirmed in discovery run 43379793467
 Unilever,manual,,,,,https://careers.unilever.com,,
 Procter & Gamble,manual,,,,,https://www.pgcareers.com,,
 Deloitte,manual,,,,,https://apply.deloitte.com,,
@@ -301,6 +301,6 @@ Oracle,manual,,,,,https://careers.oracle.com,,
 Cisco,manual,,,,,https://jobs.cisco.com,,
 IBM,manual,,,,,https://www.ibm.com/careers,,
 ServiceNow,manual,,,,,https://careers.servicenow.com,,
-Gopuff,manual,,,,,https://gopuff.com/careers,,
+Gopuff,lever,gopuff,,,,https://gopuff.com/careers,verified,Live ATS endpoint confirmed in discovery run 43379793467
 Shipt,manual,,,,,https://careers.shipt.com,,
 Grubhub,manual,,,,,https://careers.grubhub.com,,
