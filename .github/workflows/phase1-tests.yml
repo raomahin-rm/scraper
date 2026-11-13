@@ -5,6 +5,8 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - "greenhouse*_v3.py"
+      - "requirements.txt"
       - "job_scraper.py"
       - "scraper_v2.py"
       - "rank_v2.py"
@@ -26,11 +28,17 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || 'phase1-scraper-development' }}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
       - run: pip install -r requirements.txt
       - name: Run offline regression tests
-        run: python test_offline.py && python test_phase1.py && python test_scraper_v2.py && python test_rank_v2.py && python test_history_v2.py && python test_deliver_v2.py
+        run: python -m unittest discover -p 'test_*.py'
+      - name: Test Chromium form controls without employer submission
+        run: |
+          python -m playwright install --with-deps chromium
+          RUN_BROWSER_TESTS=1 python -m unittest test_greenhouse_browser_v3 -v
       - name: Confirm historical state remains unchanged
         run: git diff --exit-code -- seen_jobs.json

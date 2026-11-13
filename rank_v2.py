@@ -40,9 +40,9 @@ def location_class(location):
     raw = location or ""
     s = raw.lower()
     us = any(x in s for x in US_WORDS) or bool(re.search(US_STATES, raw))
-    foreign = any(x in s for x in NON_US) or bool(re.search(r"\\b(?:munich|berlin|hamburg|frankfurt|paris|toronto|vancouver)\\b",s))
+    foreign = any(x in s for x in NON_US) or bool(re.search(r"\b(?:munich|berlin|hamburg|frankfurt|paris|toronto|vancouver)\b",s))
     # Country prefixes such as DE - Munich are not US state abbreviations.
-    if re.match(r"^\\s*(?:DE|FR|GB|UK|CA|IN|AU|NL|IE|SG)\\s*[-–|:]\\s*",raw,re.I) and not any(x in s for x in US_WORDS):
+    if re.match(r"^\s*(?:DE|FR|GB|UK|CA|IN|AU|NL|IE|SG)\s*[-–|:]\s*",raw,re.I) and not any(x in s for x in US_WORDS):
         return "non_us"
     if foreign and not any(x in s for x in US_WORDS):
         return "non_us"

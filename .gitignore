@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+runtime/
+private/
+applications_v2.json
+v2_shortlist.json
+application_review_packets_v2.json
+application_review_packets_v2.md
+employer_questions_v2.json
+employer_answer_matches_v2.json
+tailored_application_drafts_v2.json

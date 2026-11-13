@@ -1,1 +1,4 @@
 requests>=2.31
+
+playwright>=1.49,<2
+cryptography>=43,<47
