@@ -41,6 +41,11 @@ jobs:
           python-version: "3.11"
           cache: pip
       - run: pip install -r requirements.txt
+      - name: Initialize encrypted private-material access
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GREENHOUSE_WRAPPING_SECRET: ${{ secrets.APPLICATION_PACKET_KEY || secrets.GMAIL_APP_PASSWORD }}
+        run: python greenhouse_private_v3.py bootstrap
       - name: Run the complete regression suite
         run: python -m unittest discover -p 'test_*.py'
       - name: Restore previous application queue when available
@@ -58,6 +63,9 @@ jobs:
                 cp previous-queue/applications_v2.json applications_v2.json
                 cp previous-queue/v2_shortlist.json v2_shortlist.json
                 cp previous-queue/tailored_application_drafts_v2.json tailored_application_drafts_v2.json
+                for material in application_review_packets_v2.json application_review_packets_v2.md employer_questions_v2.json employer_answer_matches_v2.json; do
+                  if test -s "previous-queue/$material"; then cp "previous-queue/$material" "$material"; fi
+                done
                 echo "Restored application history from run $previous_run"
               fi
             else
@@ -96,7 +104,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PACKET_RUN: ${{ inputs.packet_run_id }}
-          APPLICATION_PACKET_KEY: ${{ secrets.APPLICATION_PACKET_KEY }}
         run: |
           [[ "$PACKET_RUN" =~ ^[0-9]+$ ]]
           gh run download "$PACKET_RUN" --repo "$GITHUB_REPOSITORY" -n greenhouse-pipeline -D runtime/greenhouse
@@ -104,25 +111,14 @@ jobs:
             python greenhouse_artifacts_v3.py unpack runtime/greenhouse/packets.enc runtime/greenhouse
           fi
           cp runtime/greenhouse/applications_v2.json applications_v2.json
-      - name: Prepare private materials when configured
+      - name: Restore encrypted private application materials
         if: inputs.mode != 'submit'
         env:
-          CONTACT_JSON: ${{ secrets.APPLICATION_CONTACT_JSON }}
-          RESUME_BASE64: ${{ secrets.APPLICATION_RESUME_BASE64 }}
-          OVERRIDES_JSON: ${{ secrets.APPLICATION_OVERRIDES_JSON }}
-          APPLICATION_PACKET_KEY: ${{ secrets.APPLICATION_PACKET_KEY }}
+          GH_TOKEN: ${{ github.token }}
+          GREENHOUSE_WRAPPING_SECRET: ${{ secrets.APPLICATION_PACKET_KEY || secrets.GMAIL_APP_PASSWORD }}
         run: |
           mkdir -p runtime/private runtime/source
-          python - <<'PY'
-          import os,json,base64,pathlib
-          if any(os.environ.get(k) for k in ('CONTACT_JSON','RESUME_BASE64','OVERRIDES_JSON')) and not os.environ.get('APPLICATION_PACKET_KEY'):
-              raise SystemExit('Private application inputs require APPLICATION_PACKET_KEY encryption')
-          p=pathlib.Path('runtime/private')
-          for key,name in [('CONTACT_JSON','contact.json'),('OVERRIDES_JSON','overrides.json')]:
-              (p/name).write_text(json.dumps(json.loads(os.environ.get(key) or '{}')))
-          if os.environ.get('RESUME_BASE64'):
-              (p/'resume.pdf').write_bytes(base64.b64decode(os.environ['RESUME_BASE64'],validate=True))
-          PY
+          python greenhouse_private_v3.py restore --destination runtime/private --allow-empty
           cp applications_v2.json tailored_application_drafts_v2.json runtime/source/
       - name: Screen descriptions and prepare employer-specific packets
         if: inputs.mode != 'submit'
@@ -145,16 +141,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           APP_ID: ${{ inputs.application_id }}
           COMMENT_ID: ${{ inputs.approval_comment_id }}
-          RESUME_BASE64: ${{ secrets.APPLICATION_RESUME_BASE64 }}
+          GREENHOUSE_WRAPPING_SECRET: ${{ secrets.APPLICATION_PACKET_KEY || secrets.GMAIL_APP_PASSWORD }}
         run: |
           [[ "$APP_ID" =~ ^[a-f0-9]{16}$ ]]
           [[ "$COMMENT_ID" =~ ^[0-9]+$ ]]
-          mkdir -p runtime/private
-          python - <<'PY'
-          import base64,os,pathlib
-          if os.environ.get('RESUME_BASE64'):
-              pathlib.Path('runtime/private/resume.pdf').write_bytes(base64.b64decode(os.environ['RESUME_BASE64'],validate=True))
-          PY
+          python greenhouse_private_v3.py restore --destination runtime/private
           python greenhouse_pipeline_v3.py submit --packet "runtime/greenhouse/$APP_ID/packet.json" --db applications_v2.json --output "runtime/greenhouse/$APP_ID/live" --approval-comment "$COMMENT_ID"
       - name: Preserve Greenhouse outcomes
         if: always()
@@ -163,8 +154,6 @@ jobs:
           if test -s applications_v2.json; then cp applications_v2.json runtime/greenhouse/applications_v2.json; fi
       - name: Encrypt private review artifacts
         if: always()
-        env:
-          APPLICATION_PACKET_KEY: ${{ secrets.APPLICATION_PACKET_KEY }}
         run: |
           mkdir -p runtime/publish
           if [ -n "$APPLICATION_PACKET_KEY" ]; then
