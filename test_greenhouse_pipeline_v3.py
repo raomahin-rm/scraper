@@ -38,6 +38,14 @@ class PipelineTests(unittest.TestCase):
         _,_,bank,_=fixtures()
         for label in ['Gender','Have you worked at DoorDash?','Applicant Privacy Acknowledgement','Will you now require immigration sponsorship?','Are you authorized to work in Canada?','Are you authorized to work without restriction in the United States?','Do you have 10 years of experience?']:
             self.assertIsNone(g.suggested({'label':label},bank)[0],label)
+    def test_public_status_never_contains_private_answer_values(self):
+        _,_,_,packet=fixtures();packet['answers'][0]['value']='private@example.com'
+        packet['documents']={'resume':{'path':'/private/person.pdf','sha256':'hash'}}
+        result={'filled_fields':['first_name'],'errors':[],'submitted':False}
+        summary=json.dumps(g.public_summary(packet,result))
+        self.assertNotIn('private@example.com',summary)
+        self.assertNotIn('/private/person.pdf',summary)
+        self.assertIn('packet_digest',summary)
     def test_options_are_exact(self):
         app,job,bank,_=fixtures(); job['questions'][1]['fields'][0]['values']=[{'label':'Yes, permanently','value':1}]
         p=g.prepare(app,job,bank,{}, {},{'first_name':'Rao'})

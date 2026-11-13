@@ -54,4 +54,17 @@ class BrowserTests(unittest.TestCase):
             self.assertEqual(page.get_by_role('option',name='United States +1').get_attribute('aria-selected'),'true')
             browser.close()
 
+    def test_city_query_resolves_duplicate_full_address_labels(self):
+        with sync_playwright() as p:
+            kwargs={'headless':True}
+            if os.environ.get('CHROMIUM_PATH'):kwargs['executable_path']=os.environ['CHROMIUM_PATH']
+            browser=p.chromium.launch(**kwargs);page=browser.new_page()
+            page.set_content('''<div class="select__control"><span id="selected"></span>
+              <input id="candidate-location" role="combobox" oninput="if(this.value==='Chicago'){document.getElementById('choices').innerHTML='';setTimeout(()=>{document.getElementById('choices').innerHTML=document.getElementById('template').innerHTML},100)}">
+              <div id="choices"><div role="option">Chicago, Illinois, United States</div><div role="option">Chicago, Illinois, United States</div></div>
+              <template id="template"><div role="option" onclick="document.getElementById('selected').textContent=this.textContent;document.getElementById('choices').innerHTML=''">Chicago, Illinois, United States</div></template></div>''')
+            self.assertTrue(fill_value(page,{'name':'candidate-location','value':'Chicago, Illinois, United States'}))
+            self.assertEqual(page.locator('#selected').inner_text(),'Chicago, Illinois, United States')
+            browser.close()
+
 if __name__=='__main__':unittest.main()

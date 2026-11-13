@@ -255,13 +255,18 @@ def fill_value(page, answer):
         if loc.is_checked() != value:
             raise ValueError("Checkbox readback mismatch")
     elif loc.get_attribute("role") == "combobox":
+        from playwright.sync_api import expect
         loc.click()
         option = page.get_by_role("option", name=str(value), exact=True)
         try:
+            expect(option).to_have_count(1, timeout=2000)
             option.wait_for(timeout=2000)
         except Exception:
-            # Searchable async widgets (country/location/school) need a query.
-            loc.fill(str(value))
+            # Geocoders can return two identically labelled places for a full
+            # address query. Search by city, then still require one exact label.
+            query = str(value).split(",", 1)[0] if name == "candidate-location" else str(value)
+            loc.fill(query)
+            expect(option).to_have_count(1, timeout=15000)
             option.wait_for(timeout=15000)
         if option.count() != 1:
             raise ValueError("Ambiguous dropdown option: " + name)
