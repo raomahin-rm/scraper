@@ -72,7 +72,7 @@ def extract(row, data):
                    "company": row["name"], "title": title, "location": location,
                    "url": canonical(url), "source": kind}
 
-def scan(rows, session, delay=0.4):
+def scan(rows, session, delay=0.4, workday_page_size=20, workday_max_pages=100):
     jobs, failures, seen = [], [], set()
     for row in rows:
         url = endpoint(row)
@@ -81,15 +81,36 @@ def scan(rows, session, delay=0.4):
             continue
         try:
             if row["ats"] == "workday":
-                response = session.post(url, json={"appliedFacets": {}, "limit": 20, "offset": 0, "searchText": ""}, timeout=20)
+                offset = 0
+                page_signatures = set()
+                for _ in range(workday_max_pages):
+                    response = session.post(url, json={"appliedFacets": {}, "limit": workday_page_size, "offset": offset, "searchText": ""}, timeout=20)
+                    response.raise_for_status()
+                    data = response.json()
+                    postings = data.get("jobPostings")
+                    if not isinstance(postings, list):
+                        raise ValueError("Invalid Workday postings")
+                    signature = tuple(str(p.get("externalPath", "")) for p in postings)
+                    if signature in page_signatures:
+                        raise ValueError("Workday returned a repeated page")
+                    page_signatures.add(signature)
+                    for job in extract(row, data):
+                        if job["id"] not in seen:
+                            seen.add(job["id"])
+                            jobs.append(job)
+                    offset += len(postings)
+                    total = data.get("total")
+                    if not postings or (isinstance(total, int) and offset >= total) or len(postings) < workday_page_size:
+                        break
+                else:
+                    failures.append({"company": row["name"], "reason": "Workday pagination safety limit reached"})
             else:
                 response = session.get(url, timeout=20)
-            response.raise_for_status()
-            for job in extract(row, response.json()):
-                key = job["id"]
-                if key not in seen:
-                    seen.add(key)
-                    jobs.append(job)
+                response.raise_for_status()
+                for job in extract(row, response.json()):
+                    if job["id"] not in seen:
+                        seen.add(job["id"])
+                        jobs.append(job)
         except (requests.RequestException, ValueError, KeyError, TypeError) as exc:
             failures.append({"company": row["name"], "reason": str(exc)[:200]})
         time.sleep(max(0, delay))
