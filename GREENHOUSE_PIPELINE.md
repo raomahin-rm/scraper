@@ -58,7 +58,7 @@ I APPROVE SUBMIT APPLICATION_ID FULL_PACKET_SHA256
 
 The runner retrieves that comment from GitHub itself; it cannot be replaced with
 an arbitrary local approval file, actor flag, blanket approval or old queue state.
-Do not create that comment on the user's behalf.
+The agent must never originate approval. If the user explicitly approves this exact reviewed packet and instructs the agent to record approval, it may post that statement through the user's GitHub connection. General instructions to continue or reuse answers never count as approval.
 
 ```sh
 GH_TOKEN=... python greenhouse_pipeline_v3.py submit --packet runtime/greenhouse/ID/packet.json --db runtime/greenhouse/applications_v2.json --output runtime/greenhouse/ID/live --approval-comment COMMENT_ID
@@ -74,11 +74,34 @@ The existing workflow has `prepare`, `fill` and `submit` modes. `fill` takes one
 existing application ID. `submit` restores the exact `greenhouse-pipeline`
 artifact from `packet_run_id` and verifies `approval_comment_id`.
 
-Private inputs can be supplied by repository secrets `APPLICATION_CONTACT_JSON`,
-`APPLICATION_OVERRIDES_JSON`, and `APPLICATION_RESUME_BASE64`. Runtime material
-must not be committed. Do not enable private inputs without artifact encryption
-(`APPLICATION_PACKET_KEY`; see workflow). Browser screenshots remain internal
-and are not published as artifacts.
+Private inputs now use runner-owned envelope encryption. The existing Actions
+secret (`APPLICATION_PACKET_KEY`, or the already configured `GMAIL_APP_PASSWORD`)
+wraps an RSA private key through a purpose-specific HKDF key. A separate derived
+key encrypts review artifacts. No credential is read back, logged, sent to an
+employer or used to send mail during this flow.
+
+The public key and encrypted private key live in
+`application-submission-ledger/private-materials/keyring.json`. Existing contact
+JSON, per-application overrides, the commercial PDF and optional cover letter are
+sealed to that public key in `private-materials/inputs.enc.json`. Plaintext
+materials never enter repository files or public artifacts. The runner restores
+private files internally. A sanitized public summary contains field names,
+schema, errors and packet hash only; it excludes contact and answer values.
+
+```sh
+python greenhouse_private_v3.py seal --source runtime/private/sealed-inputs --keyring runtime/private/public-key.json --output runtime/private/inputs.enc.json
+```
+
+Per-application private overrides may include `_documents`, mapping `resume` or
+`cover_letter` to the corresponding restored private path. All selected document
+hashes are bound to the approval. No field or document is submitted during fill.
+
+This avoids GitHub's 48 KB repository-secret size limit for the existing PDF.
+The wrapping secret must remain stable until the keyring is explicitly rewrapped;
+changing it fails closed and must never trigger silent key replacement. The
+credential's mail permission is unchanged. Rotating the existing credential
+requires a planned rewrap or migration to a dedicated application wrapping key.
+Browser screenshots remain internal and are excluded from published artifacts.
 
 ## Validation and limits
 

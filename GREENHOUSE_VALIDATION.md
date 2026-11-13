@@ -75,3 +75,40 @@ Run `43524155025`, attempt 2, checked out code `0749801` and completed successfu
 then all 3 actual Chromium tests passed separately. The live DoorDash prefill step
 also completed successfully. No submit step ran. Both workflow YAML files parse;
 `git diff --check` passed. The only subsequent code-branch change is this report.
+
+
+## Continued development: private-material setup resolved
+
+The Actions runner initialized an RSA keypair protected by an existing Actions
+secret, with separate HKDF purposes for private-key wrapping and artifact
+protection. Existing resume/contact details and Via-specific answers/cover letter
+were sealed to its public key. The workflow successfully decrypted and restored
+all four private inputs. No new GitHub sign-in or secret entry was required.
+
+Added regression coverage for envelope tampering, wrong secrets, key integrity,
+GitHub's line-wrapped base64 responses, plaintext-free status summaries and async
+city-result ambiguity. A Via prefill caught duplicated Chicago search results
+and two additional required education controls; the adapter and sealed inputs
+were corrected using the existing resume. Voluntary demographic controls remain
+unanswered. No application was submitted.
+
+
+## Final continued-development result
+
+Actions run `43527650336` succeeded using code `58f0d1f`:
+
+* 89 unique tests passed across the offline suite (85) and real Chromium tests (4).
+* Via Senior Partner Success Manager: 14 actual live fields filled and read back.
+* No fill errors, no missing required API answers, no unresolved required live fields.
+* Commercial resume and the Via-specific TXT cover letter restored privately and
+  hash-verified; upload is deferred until individual approval.
+* Application queue: 47 draft entries and one `ready_for_review` entry.
+* Voluntary demographic fields remain blank; zero applications submitted.
+* The reconstructed human-readable review packet hash exactly matches the actual
+  Actions packet: `e6e8848a51599d04cc095d5fa1b30f8f8f252815f84b154578f97609dffc555c`.
+
+The private-material configuration blocker described earlier is resolved. The
+remaining live verification is employer document upload, the submission click,
+CAPTCHA if presented, employer confirmation and the durable submission journal's
+real outcome. Those steps remain behind explicit individual approval. No such
+approval has been received. All prior unsupported ATS limitations still apply.
