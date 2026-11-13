@@ -1,4 +1,4 @@
-name: Replacement v2 daily preview (no email)
+name: Replacement v2 daily ranked job email
 
 on:
   schedule:
@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: replacement-v2-preview
@@ -32,13 +33,33 @@ jobs:
         run: python scraper_v2.py --limit 305 --output v2_jobs.json
       - name: Rank eligible jobs
         run: python rank_v2.py --input v2_jobs.json --output v2_shortlist.json --limit 40
-      - name: Generate pending-jobs email preview (no send)
-        run: python deliver_v2.py --input v2_shortlist.json --history v2_history.json --preview v2_pending_preview.html
-      - name: Confirm history was not created or changed
-        run: git diff --exit-code -- v2_history.json && test ! -e v2_history.json
+      - name: Restore previously emailed jobs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          previous_run=$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=v2-email-history&per_page=30" --jq '[.artifacts[] | select(.expired == false) | .workflow_run.id] | .[0] // empty')
+          if [ -n "$previous_run" ]; then
+            mkdir -p previous-email
+            if gh run download "$previous_run" --repo "$GITHUB_REPOSITORY" -n v2-email-history -D previous-email; then
+              if [ -s previous-email/v2_history.json ]; then cp previous-email/v2_history.json v2_history.json; fi
+            fi
+          fi
+      - name: Email new ranked job opportunities
+        run: python deliver_v2.py --input v2_shortlist.json --history v2_history.json --preview v2_pending_preview.html --send
+        env:
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          MAIL_TO: ${{ secrets.MAIL_TO }}
+      - name: Save email deduplication history
+        uses: actions/upload-artifact@v4
+        with:
+          name: v2-email-history
+          retention-days: 90
+          path: v2_history.json
+          if-no-files-found: warn
       - uses: actions/upload-artifact@v4
         with:
-          name: replacement-v2-daily-preview
+          name: replacement-v2-daily-ranked-results
           retention-days: 14
           path: |
             v2_shortlist.json
