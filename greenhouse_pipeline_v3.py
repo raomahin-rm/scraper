@@ -24,6 +24,7 @@ from rank_v2 import evaluate
 REPO = "raomahin-rm/scraper"
 OWNER = "raomahin-rm"
 VERSION = 1
+CONFIRMATION_PATTERN = re.compile(r"^(?:(?:your )?application (?:has been (?:received|submitted)|(?:was )?(?:successfully )?submitted|received)|thank you(?: for applying(?: to .+)?| for your application)?|successfully submitted)[.!\s]*$", re.I)
 
 def now():
     return datetime.now(timezone.utc).isoformat()
@@ -378,7 +379,7 @@ def run_browser(packet, db_path, output, submit=False, approval_comment=None):
                 durable_attempt(packet, approval)
                 page.get_by_role("button", name="Submit application", exact=True).click()
                 page.locator('input[id="first_name"]').wait_for(state="hidden", timeout=30000)
-                confirmation = page.get_by_text(re.compile(r"^(?:your )?(?:application has been (?:received|submitted)|thank you for applying|successfully submitted)[.!\s]*$", re.I)).first
+                confirmation = page.get_by_text(CONFIRMATION_PATTERN).first
                 confirmation.wait_for(timeout=30000)
                 result.update(submitted=True, confirmation=confirmation.inner_text(), confirmed_url=page.url)
                 app = db["applications"][packet["id"]]
@@ -407,7 +408,7 @@ def run_browser(packet, db_path, output, submit=False, approval_comment=None):
 def public_summary(packet, result):
     """Publish control/schema evidence without contact details or answer values."""
     return {"id": packet["id"], "company": packet["company"], "title": packet["title"],
-            "status": packet.get("status"), "packet_digest": approval_digest(packet),
+            "status": "submitted" if result.get("submitted") else result.get("status", packet.get("status")), "packet_digest": approval_digest(packet),
             "filled_fields": result.get("filled_fields", []),
             "deferred_document_uploads": result.get("deferred_document_uploads", []),
             "errors": result.get("errors", []), "missing_required": packet["missing_required"],

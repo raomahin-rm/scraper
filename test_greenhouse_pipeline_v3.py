@@ -24,6 +24,11 @@ def comment(packet):
     return {"id":1, "user":{"login":g.OWNER}, "body":f"I APPROVE SUBMIT {packet['id']} {g.approval_digest(packet)}", "created_at":g.now()}
 
 class PipelineTests(unittest.TestCase):
+    def test_confirmations_accept_employer_heading_but_not_errors(self):
+        for text in ['Thank you!', 'Thank you for applying to Via!', 'Your application has been received.', 'Application submitted']:
+            self.assertIsNotNone(g.CONFIRMATION_PATTERN.fullmatch(text),text)
+        for text in ['Your application has errors', 'Thank you for your patience', 'Application not submitted']:
+            self.assertIsNone(g.CONFIRMATION_PATTERN.fullmatch(text),text)
     def test_only_direct_greenhouse_is_supported(self):
         for url in ['https://evil.example/x','https://job-boards.greenhouse.io.evil.com/example/jobs/123','http://job-boards.greenhouse.io/example/jobs/123']:
             with self.assertRaises(ValueError):g.fetch_job(url)

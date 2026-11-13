@@ -18,13 +18,14 @@ class PrivateMaterialTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             p=Path(d);(p/'source').mkdir();(p/'source'/'contact.json').write_text('{"email":"private@example.com"}')
             (p/'source'/'overrides.json').write_text('{}');(p/'source'/'resume.pdf').write_bytes(b'%PDF-fixture')
+            (p/'source'/'Rao_Mahin_Cover_Letter_Via.pdf').write_bytes(b'%PDF-final-letter')
             (p/'source'/'ignored.txt').write_text('do not include')
             bundle=seal(self.ring,p/'source');self.assertNotIn('private@example.com',json.dumps(bundle))
             self.assertNotIn(self.secret,json.dumps(self.ring))
             public_only={k:v for k,v in self.ring.items() if k!='encrypted_private_pem'}
             self.assertIsInstance(seal(public_only,p/'source'),dict)
             names=open_bundle(self.ring,bundle,self.secret,p/'out')
-            self.assertEqual(set(names),{'contact.json','overrides.json','resume.pdf'})
+            self.assertEqual(set(names),{'contact.json','overrides.json','resume.pdf','Rao_Mahin_Cover_Letter_Via.pdf'})
             self.assertEqual((p/'out'/'contact.json').read_text(),(p/'source'/'contact.json').read_text())
     def test_github_wrapped_base64_response_is_decoded(self):
         encoded=encode(json.dumps({'version':1}).encode())

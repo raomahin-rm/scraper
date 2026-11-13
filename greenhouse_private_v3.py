@@ -26,7 +26,7 @@ BRANCH = 'application-submission-ledger'
 KEYRING = 'private-materials/keyring.json'
 MATERIALS = 'private-materials/inputs.enc.json'
 AAD = b'greenhouse-private-inputs-v1'
-ALLOWED = {'contact.json', 'overrides.json', 'resume.pdf', 'cover-letter.txt'}
+ALLOWED = {'contact.json', 'overrides.json', 'resume.pdf', 'cover-letter.txt', 'Rao_Mahin_Resume.pdf', 'Rao_Mahin_Cover_Letter_Via.pdf'}
 MAX_SIZE = 20 * 1024 * 1024
 
 
@@ -100,8 +100,8 @@ def open_bundle(ring, bundle, secret, destination):
         for name in ('contact.json', 'overrides.json'):
             if name in payloads and not isinstance(json.loads(payloads[name]), dict):
                 raise ValueError('Private JSON inputs must be objects')
-        if 'resume.pdf' in payloads and not payloads['resume.pdf'].startswith(b'%PDF-'):
-            raise ValueError('Resume is not a PDF')
+        if any(name.endswith('.pdf') and not content.startswith(b'%PDF-') for name, content in payloads.items()):
+            raise ValueError('Application document is not a PDF')
         root = Path(destination)
         root.mkdir(parents=True, exist_ok=True, mode=0o700)
         for name, content in payloads.items():
