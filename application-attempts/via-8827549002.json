@@ -4,16 +4,28 @@
   "job_id": "8827549002",
   "packet_digest": "86a9c585aa4abe2082f245aaf68d8d237e3967709b789e104c437aec36aa20e1",
   "approval_comment_id": 6867975246,
-  "state": "client_validation_failed",
-  "at": "2026-11-13T23:56:32.359728+00:00",
-  "attempt_count": 1,
-  "reconciliation": {
-    "type": "client_validation_before_network",
-    "evidence_run_id": 43532800730,
-    "initial_validation_job_id": 132254398232,
-    "corrected_validation_job_id": 132259277846,
-    "reconciled_by": "Codex, within the user-authorized Via application task",
-    "assessment": "The matching pre-fix form reproduction rejected an empty first-name field and made no outgoing mutation requests. The initial real attempt remained on the form with no confirmation. The corrected validation-only check retains all reviewed fields and both documents and reaches the blocked employer submission request. One corrected attempt is permitted for the identical user-approved packet.",
-    "at": "2026-11-14T00:29:26.316Z"
-  }
+  "state": "submission_started",
+  "at": "2026-11-14T00:37:29.015318+00:00",
+  "attempt_count": 2,
+  "previous_attempts": [
+    {
+      "id": "8cc6088f647c3ded",
+      "board": "via",
+      "job_id": "8827549002",
+      "packet_digest": "86a9c585aa4abe2082f245aaf68d8d237e3967709b789e104c437aec36aa20e1",
+      "approval_comment_id": 6867975246,
+      "state": "client_validation_failed",
+      "at": "2026-11-13T23:56:32.359728+00:00",
+      "attempt_count": 1,
+      "reconciliation": {
+        "type": "client_validation_before_network",
+        "evidence_run_id": 43532800730,
+        "initial_validation_job_id": 132254398232,
+        "corrected_validation_job_id": 132259277846,
+        "reconciled_by": "Codex, within the user-authorized Via application task",
+        "assessment": "The matching pre-fix form reproduction rejected an empty first-name field and made no outgoing mutation requests. The initial real attempt remained on the form with no confirmation. The corrected validation-only check retains all reviewed fields and both documents and reaches the blocked employer submission request. One corrected attempt is permitted for the identical user-approved packet.",
+        "at": "2026-11-14T00:29:26.316Z"
+      }
+    }
+  ]
 }
