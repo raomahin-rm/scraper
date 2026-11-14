@@ -320,7 +320,16 @@ def wait_for_form_ready(page):
         # Opening a client-rendered menu proves hydration before touching files
         # or contact inputs. Escape closes it without selecting an answer.
         country.click()
-        page.get_by_role("listbox").first.wait_for(timeout=15000)
+        try:
+            page.get_by_role("listbox").first.wait_for(timeout=2000)
+        except Exception:
+            country.press("ArrowDown")
+            try:
+                page.get_by_role("listbox").first.wait_for(timeout=2000)
+            except Exception:
+                # The final fill/readback checks remain authoritative; a menu
+                # probe must not fail an otherwise interactive form.
+                pass
         country.press("Escape")
 
 def fill_form(page, packet, defer_files=False):
@@ -409,6 +418,12 @@ def run_browser(packet, db_path, output, submit=False, approval_comment=None):
                     route.continue_()
             context.route("**/*", guard)
             page = context.new_page()
+            submission_responses = []
+            submit_window = {"active": False}
+            def observe_response(response):
+                if submit_window["active"] and response.request.method == "POST" and urlparse(response.url).hostname in {"boards.greenhouse.io", "boards-api.greenhouse.io", "job-boards.greenhouse.io"}:
+                    submission_responses.append({"host": urlparse(response.url).hostname, "status": response.status})
+            page.on("response", observe_response)
             page.goto(packet["url"], wait_until="domcontentloaded", timeout=60000)
             if greenhouse_parts(page.url) != greenhouse_parts(packet["url"]):
                 raise ValueError("Application redirected to a different job")
@@ -437,11 +452,17 @@ def run_browser(packet, db_path, output, submit=False, approval_comment=None):
                 event(db, packet["id"], "submission_started", approval=approval)
                 save(db_path, db)  # Persist before click: crash/timeout is NEVER auto-retried.
                 durable_attempt(packet, approval)
+                prior_confirmations = page.get_by_text(CONFIRMATION_PATTERN).count()
+                submit_window["active"] = True
                 page.get_by_role("button", name="Submit application", exact=True).click()
-                page.locator('input[id="first_name"]').wait_for(state="hidden", timeout=30000)
-                confirmation = page.get_by_text(CONFIRMATION_PATTERN).first
-                confirmation.wait_for(timeout=30000)
-                result.update(submitted=True, confirmation=confirmation.inner_text(), confirmed_url=page.url)
+                try:
+                    confirmation = read_confirmation(page, prior_confirmations)
+                    if not any(200 <= r["status"] < 400 for r in submission_responses):
+                        raise ValueError("Employer receipt lacks a successful submission response")
+                    result.update(submitted=True, confirmation=confirmation, confirmed_url=page.url)
+                finally:
+                    result["submission_http_responses"] = submission_responses
+                    result["invalid_field_ids"] = page.locator('[aria-invalid="true"]').evaluate_all('es=>es.map(e=>e.id)')
                 app = db["applications"][packet["id"]]
                 app.update(status="submitted", confirmation=result["confirmation"], submitted_at=now())
                 event(db, packet["id"], "submitted", confirmation=result["confirmation"], approval=approval)
@@ -465,6 +486,13 @@ def run_browser(packet, db_path, output, submit=False, approval_comment=None):
         save(output / "result.public.json", public_summary(packet, result))
     return result
 
+def read_confirmation(page, prior_confirmations=0):
+    confirmation = page.get_by_text(CONFIRMATION_PATTERN).first
+    confirmation.wait_for(timeout=30000)
+    if prior_confirmations and control(page, "first_name").is_visible():
+        raise ValueError("Pre-existing text cannot count as an employer receipt")
+    return confirmation.inner_text()
+
 def public_summary(packet, result):
     """Publish control/schema evidence without contact details or answer values."""
     return {"id": packet["id"], "company": packet["company"], "title": packet["title"],
@@ -475,7 +503,7 @@ def public_summary(packet, result):
             "live_schema": packet.get("live_schema", []),
             "live_review": packet.get("live_review", {}),
             "job_fingerprint": packet["job_fingerprint"], "prepared_at": packet["prepared_at"],
-            "submitted": result.get("submitted", False)}
+            "submitted": result.get("submitted", False), "submission_http_responses": result.get("submission_http_responses", []), "invalid_field_ids": result.get("invalid_field_ids", [])}
 
 def execute(packet, db_path, output, submit=False, approval_comment=None):
     try:

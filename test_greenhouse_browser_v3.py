@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from playwright.sync_api import sync_playwright
-from greenhouse_pipeline_v3 import fill_value, fill_form
+from greenhouse_pipeline_v3 import fill_value, fill_form, read_confirmation
 
 @unittest.skipUnless(os.environ.get('RUN_BROWSER_TESTS') == '1', 'Set RUN_BROWSER_TESTS=1 with Chromium installed')
 class BrowserTests(unittest.TestCase):
@@ -103,6 +103,17 @@ class BrowserTests(unittest.TestCase):
             result=fill_form(page,packet)
             self.assertFalse(result['errors'])
             self.assertEqual(page.evaluate('window.accepted'),'Reviewed Name')
+            browser.close()
+
+    def test_new_employer_receipt_can_be_rendered_with_form_still_present(self):
+        with sync_playwright() as p:
+            kwargs={'headless':True}
+            if os.environ.get('CHROMIUM_PATH'):kwargs['executable_path']=os.environ['CHROMIUM_PATH']
+            browser=p.chromium.launch(**kwargs);page=browser.new_page()
+            page.set_content('<input id="first_name"><h1>Thank you for applying to Via!</h1>')
+            self.assertEqual(read_confirmation(page,0),'Thank you for applying to Via!')
+            self.assertTrue(page.locator('#first_name').is_visible())
+            with self.assertRaises(ValueError):read_confirmation(page,1)
             browser.close()
 
 if __name__=='__main__':unittest.main()
