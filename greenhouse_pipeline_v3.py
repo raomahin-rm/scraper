@@ -428,10 +428,13 @@ def run_browser(packet, db_path, output, submit=False, approval_comment=None):
             if greenhouse_parts(page.url) != greenhouse_parts(packet["url"]):
                 raise ValueError("Application redirected to a different job")
             page.locator('input[id="first_name"]').wait_for(timeout=30000)
-            wait_for_form_ready(page)
+            # Compare the untouched form, before a readiness probe opens any
+            # transient search/menu controls that were absent from the review.
             schema = live_fields(page)
             if submit and schema != packet.get("live_schema"):
+                print(json.dumps({"schema_mismatch": {"expected": packet.get("live_schema"), "observed": schema}}))
                 raise ValueError("Live form changed after review; new approval required")
+            wait_for_form_ready(page)
             result.update(fill_form(page, packet, defer_files=not submit))
             if not submit:
                 packet["live_schema"] = schema
