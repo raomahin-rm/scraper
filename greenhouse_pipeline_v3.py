@@ -204,18 +204,36 @@ def durable_attempt(packet, approval, result=None, session=requests):
     url = f"{root}/contents/application-attempts/{board}-{job_id}.json"
     current = session.get(url, params={"ref": LEDGER_BRANCH}, headers=headers, timeout=30)
     if result is None:
-        if current.status_code != 404:
-            if current.status_code == 200:
+        previous = None
+        if current.status_code == 200:
+            try:
+                previous = json.loads(base64.b64decode(current.json()["content"]))
+            except (ValueError, TypeError, KeyError) as exc:
+                raise ValueError("Malformed durable submission journal") from exc
+            # One manually reconciled, client-validation-only retry is permitted
+            # for the SAME user-approved packet. Unknown/network outcomes never retry.
+            allowed = (previous.get("state") == "client_validation_failed"
+                       and previous.get("packet_digest") == approval["packet_digest"]
+                       and previous.get("approval_comment_id") == approval["comment_id"]
+                       and previous.get("attempt_count", 1) == 1
+                       and previous.get("reconciliation", {}).get("type") == "client_validation_before_network"
+                       and previous.get("reconciliation", {}).get("evidence_run_id"))
+            if not allowed:
                 raise ValueError("Durable journal already contains an attempt; reconcile manually")
+        elif current.status_code != 404:
             current.raise_for_status()
         # Branch must be provisioned explicitly; never interpret an absent branch as empty history.
         ref = session.get(f"{root}/git/ref/heads/{LEDGER_BRANCH}", headers=headers, timeout=30)
         ref.raise_for_status()
         payload = {"id": packet["id"], "board": board, "job_id": job_id,
                    "packet_digest": approval["packet_digest"], "approval_comment_id": approval["comment_id"],
-                   "state": "submission_started", "at": now()}
+                   "state": "submission_started", "at": now(), "attempt_count": 2 if previous else 1}
+        if previous:
+            payload["previous_attempts"] = previous.get("previous_attempts", []) + [previous]
         body = {"message": f"Reserve approved application {packet['id']}", "branch": LEDGER_BRANCH,
                 "content": base64.b64encode((json.dumps(payload, indent=2)+"\n").encode()).decode()}
+        if previous:
+            body["sha"] = current.json()["sha"]
     else:
         current.raise_for_status()
         previous = json.loads(base64.b64decode(current.json()["content"]))
@@ -325,10 +343,11 @@ def fill_form(page, packet, defer_files=False):
         if typ in {"checkbox", "radio", "hidden", "file"}:
             continue
         try:
-            if loc.input_value() != str(answer["value"]):
+            same = lambda current: re.sub(r"\D", "", current) == re.sub(r"\D", "", str(answer["value"])) if typ == "tel" else current == str(answer["value"])
+            if not same(loc.input_value()):
                 loc.fill(str(answer["value"]))
                 loc.press("Tab")
-                if loc.input_value() != str(answer["value"]):
+                if not same(loc.input_value()):
                     raise ValueError("Final text reconciliation failed")
                 repaired.append(answer["name"])
         except Exception as exc:

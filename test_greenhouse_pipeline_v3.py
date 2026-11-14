@@ -111,6 +111,8 @@ class DurableJournalTests(unittest.TestCase):
             with self.assertRaises(ValueError):g.durable_attempt(p,{'packet_digest':'x','comment_id':1})
     def test_prior_reservation_blocks_retry(self):
         _,_,_,p=fixtures();session=Mock();session.get.return_value.status_code=200
+        import base64
+        session.get.return_value.json.return_value={'content':base64.b64encode(b'{"state":"submission_started"}').decode(),'sha':'old'}
         with patch.dict('os.environ',{'GH_TOKEN':'test-only'}):
             with self.assertRaises(ValueError):g.durable_attempt(p,{'packet_digest':'x','comment_id':1},session=session)
         session.put.assert_not_called()
@@ -122,3 +124,21 @@ class DurableJournalTests(unittest.TestCase):
         import base64
         payload=json.loads(base64.b64decode(body['content']));self.assertEqual(payload['state'],'submission_started')
         self.assertNotIn('answers',payload)
+
+
+class ReconciliationTests(unittest.TestCase):
+    def test_only_same_approved_packet_can_retry_one_validation_failure(self):
+        import base64
+        _,_,_,packet=fixtures()
+        approved={'packet_digest':'same','comment_id':123}
+        prior={'state':'client_validation_failed','packet_digest':'same','approval_comment_id':123,'reconciliation':{'type':'client_validation_before_network','evidence_run_id':1}}
+        for changes,allowed in [({},True),({'packet_digest':'different'},False),({'approval_comment_id':124},False),({'attempt_count':2},False),({'state':'submission_unknown'},False)]:
+            previous=dict(prior,**changes);current=Mock();current.status_code=200;current.json.return_value={'content':base64.b64encode(json.dumps(previous).encode()).decode(),'sha':'old'}
+            session=Mock();session.get.side_effect=[current,Mock()]
+            with patch.dict('os.environ',{'GH_TOKEN':'test-only'}):
+                if allowed:
+                    g.durable_attempt(packet,approved,session=session)
+                    body=session.put.call_args.kwargs['json'];self.assertEqual(body['sha'],'old');value=json.loads(base64.b64decode(body['content']));self.assertEqual(value['attempt_count'],2);self.assertEqual(value['previous_attempts'][0]['state'],'client_validation_failed')
+                else:
+                    with self.assertRaises(ValueError):g.durable_attempt(packet,approved,session=session)
+                    session.put.assert_not_called()

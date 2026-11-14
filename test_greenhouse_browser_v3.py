@@ -81,4 +81,16 @@ class BrowserTests(unittest.TestCase):
                 self.assertEqual(page.locator('#first_name').input_value(),'Reviewed Name')
             browser.close()
 
+    def test_phone_formatting_does_not_change_reviewed_digits(self):
+        with sync_playwright() as p:
+            kwargs={'headless':True}
+            if os.environ.get('CHROMIUM_PATH'):kwargs['executable_path']=os.environ['CHROMIUM_PATH']
+            browser=p.chromium.launch(**kwargs);page=browser.new_page()
+            page.set_content('''<form><input id="phone" type="tel" onblur="this.value='(312) 446-7951'"><input id="next"></form>''')
+            packet={'answers':[{'name':'phone','value':'3124467951','type':'input_text'},{'name':'next','value':'next','type':'input_text'}],'missing_required':[]}
+            result=fill_form(page,packet)
+            self.assertFalse(result['errors'])
+            self.assertEqual(page.locator('#phone').input_value(),'(312) 446-7951')
+            browser.close()
+
 if __name__=='__main__':unittest.main()
