@@ -1,0 +1,47 @@
+{
+  "prepared_date": "2026-11-14",
+  "applications": [
+    {
+      "id": "b6b204b13d7f170a",
+      "company": "DoorDash",
+      "title": "Senior Enterprise Account Executive, Grocery Partnerships",
+      "url": "https://job-boards.greenhouse.io/doordashusa/jobs/8261627",
+      "state": "filled_pending_answers_and_individual_approval",
+      "submitted": false,
+      "resume_attached": true,
+      "cover_letter_attached": true,
+      "cover_letter_sha256": "bbff792a626750aa6fed141550a250957eb143266db6c551a2ea995042890fec",
+      "required_unresolved_count": 4,
+      "voluntary_demographics_unanswered": true,
+      "approval_recorded": false
+    },
+    {
+      "id": "8728b67079744848",
+      "company": "DoorDash",
+      "title": "Sr. Enterprise Account Manager, DDfB",
+      "url": "https://job-boards.greenhouse.io/doordashusa/jobs/8255974",
+      "state": "filled_pending_answers_and_individual_approval",
+      "submitted": false,
+      "resume_attached": true,
+      "cover_letter_attached": true,
+      "cover_letter_sha256": "91334eb24582ab391406cf667f80e0e59599f287b9881f4376cb19344a91d4ea",
+      "required_unresolved_count": 4,
+      "voluntary_demographics_unanswered": true,
+      "approval_recorded": false
+    },
+    {
+      "id": "e4749d87cb45e69e",
+      "company": "Robinhood",
+      "title": "Senior Manager, Strategic Partnerships & Integrations",
+      "url": "https://boards.greenhouse.io/robinhood/jobs/8303985?gh_jid=8303985&t=gh_src%3D",
+      "state": "filled_pending_answers_and_individual_approval",
+      "submitted": false,
+      "resume_attached": true,
+      "cover_letter_attached": true,
+      "cover_letter_sha256": "ff844b019f8abea5ff80ff2304314b45e11ec9233a81ea8aeec228b562cb2b07",
+      "required_unresolved_count": 3,
+      "voluntary_demographics_unanswered": true,
+      "approval_recorded": false
+    }
+  ]
+}
