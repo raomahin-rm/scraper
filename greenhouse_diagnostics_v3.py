@@ -9,7 +9,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from playwright.sync_api import sync_playwright
-from greenhouse_pipeline_v3 import validate_approval, fetch_approval, assert_documents, fill_form, save
+from greenhouse_pipeline_v3 import validate_approval, fetch_approval, assert_documents, fill_form, save, wait_for_form_ready
 
 
 def main():
@@ -24,6 +24,7 @@ def main():
                 route.abort()
             else:route.continue_()
         context.route('**/*',guard);page=context.new_page();page.goto(packet['url'],wait_until='domcontentloaded',timeout=60000);page.locator('#first_name').wait_for()
+        wait_for_form_ready(page)
         result=fill_form(page,packet,defer_files=False)
         before=page.locator('input,select,textarea').evaluate_all('''es=>es.filter(e=>e.willValidate&&!e.validity.valid).map(e=>({id:e.id,message:e.validationMessage}))''')
         # All non-read requests are now denied before exercising client validation.

@@ -312,6 +312,17 @@ def fill_value(page, answer):
 def live_fields(page):
     return page.locator('form input, form select, form textarea, [data-testid="application-form"] input').evaluate_all('''es=>es.filter(e=>e.id && e.type!=='hidden' && e.type!=='file' && !e.id.startsWith('g-recaptcha')).map(e=>({id:e.id,type:e.type,required:e.required||e.getAttribute('aria-required')==='true',label:e.labels?.[0]?.innerText||e.getAttribute('aria-label')||e.id}))''')
 
+def wait_for_form_ready(page):
+    """A visible SSR input is not proof its React event handlers are attached."""
+    page.wait_for_load_state("load", timeout=30000)
+    country = control(page, "country")
+    if country.count():
+        # Opening a client-rendered menu proves hydration before touching files
+        # or contact inputs. Escape closes it without selecting an answer.
+        country.click()
+        page.get_by_role("listbox").first.wait_for(timeout=15000)
+        country.press("Escape")
+
 def fill_form(page, packet, defer_files=False):
     errors, filled, deferred, skipped = [], [], [], []
     # Uploads/SSR hydration can replace controlled inputs. Attach first, then
@@ -397,6 +408,7 @@ def run_browser(packet, db_path, output, submit=False, approval_comment=None):
             if greenhouse_parts(page.url) != greenhouse_parts(packet["url"]):
                 raise ValueError("Application redirected to a different job")
             page.locator('input[id="first_name"]').wait_for(timeout=30000)
+            wait_for_form_ready(page)
             schema = live_fields(page)
             if submit and schema != packet.get("live_schema"):
                 raise ValueError("Live form changed after review; new approval required")
