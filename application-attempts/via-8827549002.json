@@ -4,7 +4,7 @@
   "job_id": "8827549002",
   "packet_digest": "86a9c585aa4abe2082f245aaf68d8d237e3967709b789e104c437aec36aa20e1",
   "approval_comment_id": 6867975246,
-  "state": "submission_started",
+  "state": "submission_unknown",
   "at": "2026-11-14T00:37:29.015318+00:00",
   "attempt_count": 2,
   "previous_attempts": [
@@ -27,5 +27,16 @@
         "at": "2026-11-14T00:29:26.316Z"
       }
     }
-  ]
+  ],
+  "submitted": false,
+  "outcome": {
+    "http_status": 428,
+    "response_host": "boards.greenhouse.io",
+    "confirmation_observed": false,
+    "workflow_run_id": 43530667818,
+    "workflow_job_id": 132262911465,
+    "artifact_id": 14088769572,
+    "automatic_retry_allowed": false,
+    "continuation": "Approved form and both exact documents prepared in live browser; manual final submission pending."
+  }
 }
