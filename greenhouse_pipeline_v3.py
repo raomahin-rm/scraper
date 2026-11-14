@@ -327,7 +327,7 @@ def fill_form(page, packet, defer_files=False):
     errors, filled, deferred, skipped = [], [], [], []
     # Uploads/SSR hydration can replace controlled inputs. Attach first, then
     # populate contact/answer fields after the upload UI has initialized.
-    ordered = sorted(packet["answers"], key=lambda a: 0 if a.get("type") == "input_file" else 1) if not defer_files else packet["answers"]
+    ordered = packet["answers"]
     for answer in ordered:
         if answer.get("type") == "dom" and not answer.get("required") and not control(page, answer["name"]).count():
             skipped.append(answer["name"])
@@ -341,7 +341,7 @@ def fill_form(page, packet, defer_files=False):
         except Exception as exc:
             # Do not put field values, contacts, Playwright dumps or URLs with tokens in logs.
             errors.append({"field": answer["name"], "error_type": type(exc).__name__})
-    repaired = []
+    repaired, revalidated = [], []
     # Reconcile controlled text inputs after all async document/widget changes.
     # Never infer missing values: restore only the exact reviewed packet value.
     for answer in packet["answers"]:
@@ -355,17 +355,22 @@ def fill_form(page, packet, defer_files=False):
             continue
         try:
             same = lambda current: re.sub(r"\D", "", current) == re.sub(r"\D", "", str(answer["value"])) if typ == "tel" else current == str(answer["value"])
-            if not same(loc.input_value()):
+            changed = not same(loc.input_value())
+            force = answer["name"] in {"first_name", "last_name", "email", "phone"}
+            if changed or force:
+                # Clear-and-refill also synchronizes React's value tracker when
+                # SSR showed text before the controlled state was hydrated.
+                loc.fill("")
                 loc.fill(str(answer["value"]))
                 loc.press("Tab")
                 if not same(loc.input_value()):
                     raise ValueError("Final text reconciliation failed")
-                repaired.append(answer["name"])
+                (repaired if changed else revalidated).append(answer["name"])
         except Exception as exc:
             errors.append({"field": answer["name"], "error_type": type(exc).__name__})
     known = {a["name"] for a in packet["answers"] if a.get("value") is not None}
     missing = [f for f in live_fields(page) if f["required"] and f["id"] not in known]
-    return {"filled_fields": filled, "repaired_fields": repaired, "deferred_document_uploads": deferred, "skipped_unavailable_optional_fields": skipped, "errors": errors, "unresolved_live_fields": missing,
+    return {"filled_fields": filled, "repaired_fields": repaired, "revalidated_fields": revalidated, "deferred_document_uploads": deferred, "skipped_unavailable_optional_fields": skipped, "errors": errors, "unresolved_live_fields": missing,
             "missing_required": packet["missing_required"], "submitted": False}
 
 def allow_preview_request(method, url, documents):

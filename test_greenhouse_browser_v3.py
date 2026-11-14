@@ -93,4 +93,16 @@ class BrowserTests(unittest.TestCase):
             self.assertEqual(page.locator('#phone').input_value(),'(312) 446-7951')
             browser.close()
 
+    def test_reviewed_profile_value_is_synchronized_after_hydration(self):
+        with sync_playwright() as p:
+            kwargs={'headless':True}
+            if os.environ.get('CHROMIUM_PATH'):kwargs['executable_path']=os.environ['CHROMIUM_PATH']
+            browser=p.chromium.launch(**kwargs);page=browser.new_page()
+            page.set_content('''<script>window.ready=false;window.accepted='';</script><form><input id="first_name" oninput="if(window.ready)window.accepted=this.value"><input id="next" oninput="window.ready=true"></form>''')
+            packet={'answers':[{'name':'first_name','value':'Reviewed Name','type':'input_text'},{'name':'next','value':'next','type':'input_text'}],'missing_required':[]}
+            result=fill_form(page,packet)
+            self.assertFalse(result['errors'])
+            self.assertEqual(page.evaluate('window.accepted'),'Reviewed Name')
+            browser.close()
+
 if __name__=='__main__':unittest.main()
