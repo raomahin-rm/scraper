@@ -67,4 +67,18 @@ class BrowserTests(unittest.TestCase):
             self.assertEqual(page.locator('#selected').inner_text(),'Chicago, Illinois, United States')
             browser.close()
 
+    def test_document_upload_cannot_erase_previously_reviewed_name(self):
+        with sync_playwright() as p:
+            kwargs={'headless':True}
+            if os.environ.get('CHROMIUM_PATH'):kwargs['executable_path']=os.environ['CHROMIUM_PATH']
+            browser=p.chromium.launch(**kwargs);page=browser.new_page()
+            page.set_content('''<form><input id="first_name" required><input id="resume" type="file" onchange="document.getElementById('first_name').value='';document.getElementById('filename').textContent=this.files[0].name"><span id="filename"></span></form>''')
+            with tempfile.TemporaryDirectory() as d:
+                f=Path(d)/'resume.txt';f.write_text('test fixture')
+                packet={'answers':[{'name':'first_name','value':'Reviewed Name','type':'input_text'},{'name':'resume','value':str(f),'type':'input_file'}],'missing_required':[]}
+                result=fill_form(page,packet,defer_files=False)
+                self.assertFalse(result['errors'])
+                self.assertEqual(page.locator('#first_name').input_value(),'Reviewed Name')
+            browser.close()
+
 if __name__=='__main__':unittest.main()
