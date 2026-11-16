@@ -41,6 +41,8 @@ TITLE_EXCLUDE = [
     r"\b(?:product|program|project) manager\b", r"\b(?:retail|field|inside) sales (?:representative|associate)\b",
     r"\b(?:accountant|accounting|auditor|controller|analyst|designer|territory sales)\b",
     r"\b(?:vice president|chief|president|head of|intern)\b",
+    r"\b(?:marketing|influencer|creator|activation|brand strategy|content|promotions?|social media)\b",
+    r"\b(?:sourcing|procurement|supply chain|scm|life sciences?|biotech|clinical|pharmaceutical)\b",
 ]
 HARD_TECHNICAL = [
     r"(?:required?|must have|hands.on|experience with|proficiency in)[^.]{0,95}(?:software engineering|cloud architecture|aws architecture|azure architecture|gcp architecture|ci/cd|devsecops|kubernetes|solution architecture|llm framework|agent framework|mcp server)",
@@ -48,6 +50,17 @@ HARD_TECHNICAL = [
     r"\b(?:architecting|building) (?:cloud|production) (?:systems|infrastructure|integrations)\b",
     r"\b(?:coding|programming) (?:in |with )?(?:python|java|go|typescript)\b",
 ]
+INDUSTRY_HARD_REQUIREMENT = [
+    r"\b(?:\d+\+?\s*years? (?:of )?experience (?:in|within)|must have (?:experience|background) in|required (?:experience|expertise) in)[^.]{0,105}\b(?:life sciences?|pharmaceuticals?|biotech|clinical|medical devices?|aerospace engineering|petrochemical processing)\b",
+    r"\b(?:bachelor'?s|master'?s) degree in (?:chemical engineering|chemistry|biology|pharmaceutical sciences) (?:is )?required\b",
+]
+NO_SPONSORSHIP_PATTERNS = [
+    r"\b(?:visa|work authorization) sponsorship\b[^.]{0,90}\b(?:not available|not offered|unavailable|will not be provided)\b",
+    r"\bno (?:current or future )?(?:visa|work authorization)?\s*sponsorship (?:is )?available\b",
+    r"\b(?:will not|do not|cannot|unable to) (?:provide|offer)?\s*(?:visa )?sponsorship\b",
+    r"\b(?:without requiring|without need for)\s+(?:now or in the future )?(?:visa |employment )?sponsorship\b",
+]
+BDR_TEAM_REQUIREMENT = r"\b(?:manag(?:e|ing)|coach(?:ing)?|leading)[^.]{0,110}\b(?:business development representatives?|bdrs?|sdrs?|inside sales teams?)\b"
 EXCLUDE_EMPLOYERS = {"jobgether", "theladders", "ladders"}
 US_HINTS = ("united states", "usa", "u.s.", "us-remote", "remote us", "us remote",
             "chicago", "new york", "brooklyn", "manhattan", "san francisco",
@@ -360,8 +373,12 @@ def verify(job, now=None, session=None):
         mandatory = sum(bool(re.search(pattern, content.lower())) for pattern in HARD_TECHNICAL)
         if mandatory >= 2:
             return None, "mandatory_technical_fit"
-        if re.search(r"\b(?:will not|do not|cannot|unable to) (?:provide|offer)?\s*(?:visa )?sponsorship\b", content.lower()):
+        if any(re.search(p, content.lower()) for p in NO_SPONSORSHIP_PATTERNS):
             return None, "no_sponsorship"
+        if any(re.search(p, content.lower()) for p in INDUSTRY_HARD_REQUIREMENT):
+            return None, "specialized_industry_requirement"
+        if re.search(BDR_TEAM_REQUIREMENT, content.lower()) and re.search(r"business development|sales development", title.lower()):
+            return None, "bdr_team_management"
         fresh = dict(job, company=job["company"], title=title, location=verified_location,
                      description=content, posted_age_days=round(days,1),
                      employer_verified=True, verification_source=ats)
