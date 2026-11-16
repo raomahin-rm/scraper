@@ -385,6 +385,10 @@ def verify(job, now=None, session=None):
             return None, "no_sponsorship"
         if any(re.search(p, content.lower()) for p in INDUSTRY_HARD_REQUIREMENT):
             return None, "specialized_industry_requirement"
+        if re.search(r"\bexperience in aerospace and defense industry required\b", content.lower()):
+            return None, "specialized_industry_requirement"
+        if re.search(r"\bdeep knowledge of the outdoor advertising business\b|\bout.of.home advertising\b|\bbillboard advertising\b", content.lower()):
+            return None, "advertising_sales_not_target"
         if re.search(BDR_TEAM_REQUIREMENT, content.lower()) and re.search(r"business development|sales development", title.lower()):
             return None, "bdr_team_management"
         if any(re.search(p, content.lower()) for p in SPECIALIZED_EDUCATION):
