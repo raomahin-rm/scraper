@@ -1,63 +1,43 @@
-# Daily job scraper (version 2)
+# Verified Daily Job Search — V3
 
-Every morning it checks company job feeds and Adzuna, keeps US commercial roles
-at Associate to Senior Manager level, scores them, and emails the top 25 to
-raomahin@gmail.com.
+This repository now prioritizes **verified, recently published, well-matched U.S. commercial jobs** over large unfiltered batches of links. The scheduled workflow is [Verified daily job shortlist v3](.github/workflows/verified-job-search-v3.yml). The previous V2 email workflow is **manual-only**.
 
-## What changed in version 2
+## What it does
 
-- US only. Non-US locations are dropped.
-- Priority cities: NY, Chicago, LA, SF, Houston, Dallas, Austin, Boston, Atlanta.
-  Remote and the rest of the US rank lower.
-- Two resumes. Each job says "Commercial resume" or "AI/Tech resume".
-- Policy track is off.
-- Visa column. Postings that say they will not sponsor are dropped.
-  Postings that say they sponsor get a boost. Companies in `sponsors.csv`
-  get a smaller boost. Most postings say nothing, so "Unknown" is normal.
-- New companies get a bonus. Companies you applied to recently get a penalty
-  and a warning.
-- At most 2 different roles per company per email. The same role in several cities counts once.
-- Titles added: Key Account Manager, Customer Business Manager, Vendor
-  Manager, Buyer, Account Executive, Revenue Growth Management.
-- 23 target companies get a bonus. Big employers that use Workday or their own
-  career sites are searched through Adzuna.
+- Searches a broad, multi-ATS public feed rather than relying exclusively on a fixed list of 305 employers.
+- Only considers fresh feed discoveries as **leads**, never as evidence of when the job was published.
+- Checks employer Greenhouse, Lever, Ashby or Workday sources for current availability, complete job text, U.S. location and actual publication date. No confirmed age means no recommendation.
+- Screens for commercial partnerships, BD, enterprise accounts, sales leadership, category/vendor management; excludes technical engineering, BDR/SDR, specialist procurement, marketing activation, hard industry gaps and roles with clear sponsorship prohibitions.
+- Checks existing application tracking and temporarily reduces repeat recommendations from seven previously overused employers.
+- Emails **up to 15** employer-verified positions on the daily schedule, grouped with fit and gap lines; uses persistent deduplication history across runs. Code-change and manual runs do **not** send email.
+- **Never submits applications.** Greenhouse application-form workflows remain independent and require explicit individual approval.
 
-## Files
+## Main code
 
-- `job_scraper.py`  the script
-- `config.py`  companies, titles, cities, scoring. Edit this one.
-- `applied.csv`  companies and jobs you applied to (columns: company,title,url,date)
-- `sponsors.csv`  companies known to file H-1B petitions. A starter list from
-  general knowledge, not live data. Replace it with real data when you can.
-- `test_offline.py`  quick test with fake jobs
-- `.github/workflows/daily-jobs.yml`  the daily schedule
+Source, screening, age verification and HTML audit: [verified_search_v3.py](https://github.com/raomahin-rm/scraper/blob/phase1-scraper-development/verified_search_v3.py).
 
-## applied.csv
+Opt-in SMTP and persistent dedupe: [deliver_verified_v3.py](https://github.com/raomahin-rm/scraper/blob/phase1-scraper-development/deliver_verified_v3.py).
 
-One row per company is enough. Title, url and date are optional.
+Tests: [test_verified_search_v3.py](https://github.com/raomahin-rm/scraper/blob/phase1-scraper-development/test_verified_search_v3.py) and [test_deliver_verified_v3.py](https://github.com/raomahin-rm/scraper/blob/phase1-scraper-development/test_deliver_verified_v3.py).
 
-    company,title,url,date
-    Block,,,
-    Stripe,Partnerships Manager,,2026-10-01
+Detailed specification, limitations and third-party credits: [VERIFIED_JOB_SEARCH_V3.md](https://github.com/raomahin-rm/scraper/blob/phase1-scraper-development/VERIFIED_JOB_SEARCH_V3.md).
 
-A date lets the script warn you when you applied less than 60 days ago.
+## Manual read-only verification
 
-## Secrets
+```bash
+pip install -r requirements.txt
+python -m unittest test_verified_search_v3 test_deliver_verified_v3 -v
+python verified_search_v3.py --hours 72 --verify 110 --limit 15
+python deliver_verified_v3.py
+```
 
-Add these in GitHub: Settings > Secrets and variables > Actions.
+The last command only generates an email preview. SMTP requires the explicit `--send` option and configured repository secrets.
 
-- `GMAIL_USER`, `GMAIL_APP_PASSWORD`, `MAIL_TO` (already done)
-- `ADZUNA_APP_ID` and `ADZUNA_APP_KEY`: register free at developer.adzuna.com
-- `ANTHROPIC_API_KEY`: from console.anthropic.com, turns on the 1 to 10 fit score
+## Limits and next improvements
 
-Never paste keys into chats or emails.
+- `applied.csv` is currently **incomplete** and must not be mistaken for the candidate's full application history. The seven-company cooldown is temporary, not a substitute for a complete private tracker.
+- Unsupported ATS feeds may yield candidates that are **withheld** because employer verification is unavailable; this is preferable to sending unverified links.
+- Automatic qualification screening is not a substitute for reviewing a complex job description. A verified open role may still be a weaker match than the preferred shortlist.
+- LinkedIn connection matching and private application-history reconciliation have not yet been integrated.
 
-## Limits
-
-- First run after an update shows jobs from the last 14 days, so you see the backlog. After that each job is emailed once.
-- Companies on Workday or their own sites (Google, Amazon, Walmart and others)
-  only come through Adzuna. Without Adzuna keys you only see tech companies.
-- The visa column is a hint, not a promise. A company on the sponsor list may
-  still not sponsor this role.
-- It does not scrape LinkedIn or Indeed.
-- It does not apply for you.
+The v3 discovery design is informed by [Heidi Miller's MIT-licensed Daily Job Search methodology](https://github.com/heidimillerpresents-png/claude-skills/tree/main/daily-job-search) and [Riley Dorrington's public multi-ATS feed](https://github.com/Riley-Dorrington/job-board-data), used as a source of unverified leads. It does not transplant or execute the upstream Claude skill.
