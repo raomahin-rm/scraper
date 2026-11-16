@@ -6,6 +6,7 @@ import argparse
 import json
 import re
 from collections import Counter
+from datetime import datetime, timezone
 from pathlib import Path
 import config
 
@@ -35,6 +36,50 @@ US_WORDS = ("united states", "usa", "u.s.", "us remote", "remote - us", "remote 
 NON_US = ("canada", "united kingdom", "london", "india", "pakistan", "germany", "france", "singapore", "australia", "netherlands", "ireland", "poland", "spain", "brazil", "mexico", "japan", "israel", "dubai", "uae")
 PREFERRED = ("chicago", "new york", "nyc", "brooklyn", "san francisco", "bay area", "los angeles", "dallas", "austin", "palo alto", "san jose", "oakland")
 TARGETS = tuple(x.split("|")[0].lower() for x in config.TARGET_COMPANIES)
+
+# An updated requisition is not necessarily newly published.
+MAX_POSTING_AGE_DAYS = 21
+# Company-level cooldown after repeated unsuccessful applications.
+REPEAT_COMPANY_COOLDOWN = {
+    name: "2027-02-13"
+    for name in ("datadog", "okta", "via", "stripe", "doordash", "ramp", "databricks")
+}
+
+
+def posting_age_days(job, now=None):
+    """Return a conservative posting age or None if no reliable date exists."""
+    now = now or datetime.now(timezone.utc)
+    label = str(job.get("posted_on") or "").strip().lower()
+    if label:
+        if re.search(r"\\b(?:today|just posted)\\b", label):
+            return 0.0
+        if re.search(r"\\byesterday\\b", label):
+            return 1.0
+        relative = re.search(r"\\b(\\d+)\\s*\\+?\\s*(days?|weeks?|months?|hours?)\\s*ago\\b", label)
+        if relative:
+            amount = int(relative.group(1))
+            unit = relative.group(2)
+            return amount * (30 if unit.startswith("month") else 7 if unit.startswith("week") else 1 if unit.startswith("day") else 1 / 24)
+    raw = job.get("posted_at")
+    if raw in (None, ""):
+        return None
+    try:
+        if isinstance(raw, (float, int)):
+            stamp = datetime.fromtimestamp(raw / 1000 if raw > 1e11 else raw, tz=timezone.utc)
+        else:
+            stamp = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+            if stamp.tzinfo is None:
+                stamp = stamp.replace(tzinfo=timezone.utc)
+        delta = (now - stamp).total_seconds() / 86400
+        return max(0.0, delta) if delta >= -1 else None
+    except (ValueError, OverflowError, OSError, TypeError):
+        return None
+
+
+def repeat_company_on_cooldown(job, now=None):
+    now = now or datetime.now(timezone.utc)
+    date = REPEAT_COMPANY_COOLDOWN.get(str(job.get("company") or "").strip().casefold())
+    return bool(date and now.date().isoformat() <= date)
 
 def location_class(location):
     raw = location or ""
@@ -119,6 +164,18 @@ def shortlist(jobs, limit=40):
             continue
         ids.add(identity)
         result, reason = evaluate(job)
+        if result and repeat_company_on_cooldown(result):
+            counts["repeat_company_cooldown"] += 1
+            continue
+        if result:
+            age = posting_age_days(result)
+            if age is None:
+                counts["posting_age_unverified"] += 1
+                continue
+            if age > MAX_POSTING_AGE_DAYS:
+                counts["posting_too_old"] += 1
+                continue
+            result["posting_age_days"] = round(age, 1)
         counts[reason] += 1
         if result:
             accepted.append(result)
@@ -162,6 +219,7 @@ def main():
     result["companies_checked"] = payload.get("companies_checked")
     result["raw_jobs"] = len(payload["jobs"])
     (ROOT / a.output).write_text(json.dumps(result, indent=2), encoding="utf-8")
+    print("Filtering:", result["counts"])
     print("Raw:", result["raw_jobs"], "US matches:", result["total_us_matches"],
           "Review location:", result["total_location_review"], "Shortlist:", len(result["top"]))
     for j in result["top"][:15]:
