@@ -1,14 +1,17 @@
-name: Verified broad job search v3 (read-only audit)
+name: Verified daily job shortlist v3
 # Live audit after additional qualification and sponsorship screening tests
 
 on:
   push:
     branches: [main]
     paths: [".github/workflows/verified-job-search-v3.yml"]
+  schedule:
+    - cron: "30 12 * * *"
   workflow_dispatch:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: verified-job-search-v3
@@ -31,8 +34,41 @@ jobs:
         run: python -m unittest test_verified_search_v3 test_deliver_verified_v3 -v
       - name: Search broad feed and verify employers (no email, no application)
         run: python verified_search_v3.py --hours 72 --verify 110 --limit 15
+      - name: Restore previous verified and legacy email history
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for name in verified-email-history-v3 v2-email-history; do
+            prior=$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${name}&per_page=100" --jq '[.artifacts[] | select(.expired == false) | .workflow_run.id] | .[0] // empty')
+            if [ -n "$prior" ]; then
+              mkdir -p "previous-${name}"
+              gh run download "$prior" --repo "$GITHUB_REPOSITORY" -n "$name" -D "previous-${name}"
+              if [ "$name" = verified-email-history-v3 ] && [ -s "previous-${name}/verified_history_v3.json" ]; then
+                cp "previous-${name}/verified_history_v3.json" verified_history_v3.json
+              elif [ "$name" = v2-email-history ] && [ -s "previous-${name}/v2_history.json" ]; then
+                cp "previous-${name}/v2_history.json" v2_history.json
+              fi
+            fi
+          done
+          test -s verified_history_v3.json || printf '{}\n' > verified_history_v3.json
+      - name: Email new employer-verified jobs on schedule only
+        if: github.event_name == 'schedule'
+        env:
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          MAIL_TO: ${{ secrets.MAIL_TO }}
+        run: python deliver_verified_v3.py --send
       - name: Render preview without sending email
+        if: github.event_name != 'schedule'
         run: python deliver_verified_v3.py
+      - name: Preserve delivery deduplication history
+        if: github.event_name == 'schedule'
+        uses: actions/upload-artifact@v4
+        with:
+          name: verified-email-history-v3
+          retention-days: 90
+          path: verified_history_v3.json
       - name: Upload verified shortlist and screening audit
         if: always()
         uses: actions/upload-artifact@v4
