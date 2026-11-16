@@ -117,6 +117,37 @@ class DiscoveryTests(unittest.TestCase):
         html=v3.build_report({"generated_at":NOW.isoformat(),"jobs":kept,"counts":dict(counts)})
         self.assertIn("Verified commercial jobs",html)
         self.assertNotIn("<script>",html)
+    def test_reject_marketing_influencer_and_supply_chain_positions(self):
+        for title in ("Sr Manager, Partnership Marketing", "Manager, Creator Partnerships", "Partnership Activation Manager", "International Enterprise SCM Category Manager", "Manager, Partnerships and Content"):
+            with self.subTest(title=title):
+                self.assertFalse(v3.commercial_title(title))
+    def test_no_sponsorship_paypal_and_southwest_rejected(self):
+        j=lead()
+        for statement in (
+            "Visa Sponsorship through PayPal is not available for this position now or any time in the future.",
+            "No current or future work authorization sponsorship available."
+        ):
+            with self.subTest(statement=statement):
+                data=greenhouse()
+                data["content"]+=" "+statement
+                s=Mock()
+                s.get.return_value=response(data)
+                _,reason=v3.verify(j,now=NOW,session=s)
+                self.assertEqual(reason,"no_sponsorship")
+    def test_ashland_life_sciences_requirement_excluded(self):
+        data=greenhouse()
+        data["content"]+=" 10+ years of experience in the pharmaceutical, excipient, biotech, CDMO, or broader life sciences industry, with a demonstrated track record of commercial success."
+        s=Mock()
+        s.get.return_value=response(data)
+        _,reason=v3.verify(lead(),now=NOW,session=s)
+        self.assertEqual(reason,"specialized_industry_requirement")
+    def test_manager_of_bdr_team_excluded(self):
+        data=greenhouse(title="Business Development Manager")
+        data["content"]+=" Manage and coach business development representatives (BDRs), including hiring and performance coaching of inside sales teams."
+        s=Mock()
+        s.get.return_value=response(data)
+        _,reason=v3.verify(lead(title="Business Development Manager"),now=NOW,session=s)
+        self.assertEqual(reason,"bdr_team_management")
     def test_manifest_validation(self):
         s=Mock()
         s.get.return_value=response({"chunks":["jobs_chunk_0.json.gz"],"totalJobs":100})
