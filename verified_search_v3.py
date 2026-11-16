@@ -41,6 +41,7 @@ TITLE_EXCLUDE = [
     r"\b(?:product|program|project) manager\b", r"\b(?:retail|field|inside) sales (?:representative|associate)\b",
     r"\b(?:accountant|accounting|auditor|controller|analyst|designer|territory sales)\b",
     r"\b(?:vice president|chief|president|head of|intern)\b",
+    r"\b(?:representative|territory)\b",
     r"\b(?:marketing|influencer|creator|activation|brand strategy|content|promotions?|social media)\b",
     r"\b(?:sourcing|procurement|supply chain|scm|life sciences?|biotech|clinical|pharmaceutical)\b",
 ]
@@ -61,6 +62,12 @@ NO_SPONSORSHIP_PATTERNS = [
     r"\b(?:without requiring|without need for)\s+(?:now or in the future )?(?:visa |employment )?sponsorship\b",
 ]
 BDR_TEAM_REQUIREMENT = r"\b(?:manag(?:e|ing)|coach(?:ing)?|leading)[^.]{0,110}\b(?:business development representatives?|bdrs?|sdrs?|inside sales teams?)\b"
+SPECIALIZED_EDUCATION = [
+    r"\brequired education[^.]{0,90}\btechnical undergraduate degree\b",
+    r"\b(?:minimum qualifications|requirements)[^.]{0,140}\b(?:12|13|14|15)\+? years? of (?:industry |relevant )?experience\b",
+]
+MARKETING_PARTNERSHIP_TERMS = ("co-marketing", "sponsorships", "brand marketing", "social, email, events", "influencer campaigns")
+
 EXCLUDE_EMPLOYERS = {"jobgether", "theladders", "ladders"}
 US_HINTS = ("united states", "usa", "u.s.", "us-remote", "remote us", "us remote",
             "chicago", "new york", "brooklyn", "manhattan", "san francisco",
@@ -379,6 +386,10 @@ def verify(job, now=None, session=None):
             return None, "specialized_industry_requirement"
         if re.search(BDR_TEAM_REQUIREMENT, content.lower()) and re.search(r"business development|sales development", title.lower()):
             return None, "bdr_team_management"
+        if any(re.search(p, content.lower()) for p in SPECIALIZED_EDUCATION):
+            return None, "specialized_education_or_seniority"
+        if sum(term in content.lower() for term in MARKETING_PARTNERSHIP_TERMS) >= 3:
+            return None, "partnership_marketing_not_sales"
         fresh = dict(job, company=job["company"], title=title, location=verified_location,
                      description=content, posted_age_days=round(days,1),
                      employer_verified=True, verification_source=ats)
