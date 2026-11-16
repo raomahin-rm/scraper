@@ -5,7 +5,9 @@ No email, no mutation of seen_jobs.json. Run on development branch only.
 """
 import argparse
 import csv
+import html
 import json
+import re
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -23,7 +25,7 @@ def canonical(url):
 def endpoint(row):
     kind, slug = row["ats"].lower(), row.get("slug", "")
     if kind == "greenhouse" and slug:
-        return "https://boards-api.greenhouse.io/v1/boards/" + slug + "/jobs"
+        return "https://boards-api.greenhouse.io/v1/boards/" + slug + "/jobs?content=true"
     if kind == "lever" and slug:
         return "https://api.lever.co/v0/postings/" + slug + "?mode=json"
     if kind == "ashby" and slug:
@@ -32,6 +34,15 @@ def endpoint(row):
         return "https://{}.{}.myworkdayjobs.com/wday/cxs/{}/{}/jobs".format(
             row["tenant"], row["subdomain"], row["tenant"], row["board"])
     return None
+
+def clean_description(value):
+    """Normalize ATS description text for actual qualification screening."""
+    if not value:
+        return ""
+    value = html.unescape(str(value))
+    value = re.sub(r"<[^>]+>", " ", value)
+    return re.sub(r"\\s+", " ", value).strip()
+
 
 def extract(row, data):
     kind = row["ats"].lower()
@@ -49,20 +60,24 @@ def extract(row, data):
             title = item.get("title", "")
             location = (item.get("location") or {}).get("name", "")
             url = item.get("absolute_url", "")
+            description = clean_description(item.get("content") or item.get("description"))
         elif kind == "lever":
             uid = str(item.get("id", ""))
             title = item.get("text", "")
             location = (item.get("categories") or {}).get("location", "")
             url = item.get("hostedUrl", "")
+            description = clean_description(" ".join([str(item.get("descriptionPlain") or item.get("description") or ""), " ".join(str(x.get("text") or x.get("content") or "") for x in item.get("lists", []) if isinstance(x, dict))]))
         elif kind == "ashby":
             uid = str(item.get("id", ""))
             title = item.get("title", "")
             location = item.get("location", "")
             url = item.get("jobUrl", "")
+            description = clean_description(item.get("descriptionPlain") or item.get("descriptionHtml") or item.get("description"))
         else:
             uid = str(item.get("bulletFields", [""])[0]) if item.get("bulletFields") else str(item.get("externalPath", ""))
             title = item.get("title", "")
             location = item.get("locationsText") or item.get("locations", "")
+            description = clean_description(item.get("jobDescription") or "")
             url = "https://{}.{}.myworkdayjobs.com/en-US/{}{}".format(
                 row["tenant"], row["subdomain"], row["board"], item.get("externalPath", ""))
         if not isinstance(location, str):
@@ -70,7 +85,7 @@ def extract(row, data):
         if uid and title and url:
             yield {"id": kind + ":" + (row.get("slug") or row.get("tenant", "")) + ":" + uid,
                    "company": row["name"], "title": title, "location": location,
-                   "url": canonical(url), "source": kind}
+                   "url": canonical(url), "source": kind, "description": description}
 
 def scan(rows, session, delay=0.4, workday_page_size=20, workday_max_pages=100):
     jobs, failures, seen = [], [], set()
