@@ -16,6 +16,24 @@ class ReplacementTests(unittest.TestCase):
         self.assertEqual(len(jobs),1)
         self.assertEqual(jobs[0]["id"],"greenhouse:stripe:42")
         self.assertEqual(jobs[0]["location"],"Chicago, IL")
+    def test_workday_age_and_description_are_preserved(self):
+        row={"ats":"workday","tenant":"fis","board":"SearchJobs","subdomain":"wd5","name":"FIS"}
+        data={"jobPostings":[{"externalPath":"/job/US-GA-ATL-201-STE-900/Account-Manager-Sr-Lead--Strategic-Accounts_JR0308993",
+                             "title":"Account Manager Sr Lead, Strategic Accounts",
+                             "locationsText":"US GA ATL 201 STE 900",
+                             "postedOn":"Posted 30+ Days Ago"}]}
+        item=list(v2.extract(row,data))[0]
+        self.assertEqual(item["posted_on"], "Posted 30+ Days Ago")
+        self.assertEqual(item["company"], "FIS")
+    def test_greenhouse_content_and_original_published_date(self):
+        row={"ats":"greenhouse","slug":"example","name":"Example"}
+        data={"jobs":[{"id":32,"title":"Strategic Partnerships Manager","location":{"name":"Chicago, IL"},
+                       "absolute_url":"https://job-boards.greenhouse.io/example/jobs/32",
+                       "content":"<p>Must build hands-on cloud architecture.</p>",
+                       "first_published":"2026-11-11T00:00:00Z"}]}
+        item=list(v2.extract(row,data))[0]
+        self.assertIn("hands-on cloud architecture", item["description"])
+        self.assertEqual(item["posted_at"], "2026-11-11T00:00:00Z")
     def test_extract_ashby(self):
         row={"ats":"ashby","slug":"openai","name":"OpenAI"}
         data={"jobs":[{"id":"a1","title":"Account Manager","location":"New York","jobUrl":"https://example.com/a1"}]}
