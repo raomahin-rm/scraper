@@ -194,6 +194,20 @@ class DiscoveryTests(unittest.TestCase):
         sess.get.return_value=response(data)
         _,reason=v3.verify(lead(title="Business Development Manager"),now=NOW,session=sess)
         self.assertEqual(reason,"specialized_industry_requirement")
+    def test_outdoor_advertising_sales_not_commercial_target(self):
+        data=greenhouse()
+        data["content"]+=" Deep knowledge of the outdoor advertising business & competitive environment is required."
+        sess=Mock()
+        sess.get.return_value=response(data)
+        _,reason=v3.verify(lead(),now=NOW,session=sess)
+        self.assertEqual(reason,"advertising_sales_not_target")
+    def test_aerospace_and_defense_specific_experience_not_profile_match(self):
+        data=greenhouse()
+        data["content"]+=" Experience in Aerospace and Defense Industry required."
+        sess=Mock()
+        sess.get.return_value=response(data)
+        _,reason=v3.verify(lead(),now=NOW,session=sess)
+        self.assertEqual(reason,"specialized_industry_requirement")
     def test_manifest_validation(self):
         s=Mock()
         s.get.return_value=response({"chunks":["jobs_chunk_0.json.gz"],"totalJobs":100})
