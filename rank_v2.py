@@ -51,11 +51,11 @@ def posting_age_days(job, now=None):
     now = now or datetime.now(timezone.utc)
     label = str(job.get("posted_on") or "").strip().lower()
     if label:
-        if re.search(r"\\b(?:today|just posted)\\b", label):
+        if re.search(r"\b(?:today|just posted)\b", label):
             return 0.0
-        if re.search(r"\\byesterday\\b", label):
+        if re.search(r"\byesterday\b", label):
             return 1.0
-        relative = re.search(r"\\b(\\d+)\\s*\\+?\\s*(days?|weeks?|months?|hours?)\\s*ago\\b", label)
+        relative = re.search(r"\b(\d+)\s*\+?\s*(days?|weeks?|months?|hours?)\s*ago\b", label)
         if relative:
             amount = int(relative.group(1))
             unit = relative.group(2)
