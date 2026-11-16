@@ -185,6 +185,15 @@ class DiscoveryTests(unittest.TestCase):
         sess.get.return_value=response(data)
         _,reason=v3.verify(lead(),now=NOW,session=sess)
         self.assertEqual(reason,"specialized_industry_requirement")
+    def test_cisco_investment_tech_integration_title_excluded(self):
+        self.assertFalse(v3.commercial_title("Business Development Manager (Investment Strategy)I"))
+    def test_hbfuller_adhesives_sales_specialization_rejected(self):
+        data=greenhouse(title="Business Development Manager")
+        data["content"]+=" REQUIREMENTS: At least 7 years of Business Development or Direct Sales experience within the pressure sensitive adhesive market."
+        sess=Mock()
+        sess.get.return_value=response(data)
+        _,reason=v3.verify(lead(title="Business Development Manager"),now=NOW,session=sess)
+        self.assertEqual(reason,"specialized_industry_requirement")
     def test_manifest_validation(self):
         s=Mock()
         s.get.return_value=response({"chunks":["jobs_chunk_0.json.gz"],"totalJobs":100})
