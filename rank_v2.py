@@ -23,7 +23,7 @@ BLOCK = [
     r"\binside sales\b|\bretail sales\b|\bdoor.to.door\b|\bfield sales representative\b",
     r"\b(engineer|developer|scientist|designer|recruiter|attorney|counsel|accountant)\b",
     r"\b(product manager|program manager|project manager)\b",
-    r"\b(technical program manager|engineering manager|technical project manager|technical delivery manager)\b",
+    r"\b(technical program manager|engineering manager|technical project manager|technical delivery manager|partner solutions? manager|partner solutions? architect|solutions? architect|partner engineer)\b",
     r"\b(marketing|advertising|ad sales|media buying|procurement analyst)\b",
     r"\b(technology sourcing|strategic sourcing|procurement)\b",
     r"\b(coordinator|administrator)\b",
@@ -59,6 +59,15 @@ def evaluate(job):
     t = title.lower()
     if re.search(r"\b(technical account manager|technical customer success|technical partnerships? manager)\b",t) and not re.search(r"enterprise|commercial|revenue|sales|renewals?|expansion|partnerships?", (job.get("description") or "").lower()):
         return None, "technical_fit_unverified"
+    # A commercial-sounding title must not override mandatory hands-on engineering requirements.
+    description = (job.get("description") or "").lower()
+    technical_requirements = [
+        r"(?:hands.on|experience (?:with|in)|proficien(?:t|cy) (?:with|in))[^.\\n]{0,100}(?:cloud architecture|aws architecture|azure architecture|gcp architecture|hyperscaler architecture)",
+        r"(?:hands.on|experience (?:with|in))[^.\\n]{0,100}(?:ci/cd|devsecops|model evaluation frameworks|llm apis|agent frameworks|mcp)",
+        r"(?:senior )?(?:solutions? architect|partner engineer|software engineer)[^.\\n]{0,90}(?:experience|background|role)",
+    ]
+    if sum(bool(re.search(p, description)) for p in technical_requirements) >= 2:
+        return None, "mandatory_technical_expertise"
     if any(re.search(p, t, re.I) for p in BLOCK):
         return None, "blocked_title"
     matches = [(score, label) for p, score, label in INCLUDE if re.search(p, t, re.I)]
