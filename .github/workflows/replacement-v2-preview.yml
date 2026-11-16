@@ -1,12 +1,9 @@
-name: Replacement v2 daily ranked job email
+name: Legacy v2 job shortlist (manual only)
 
 on:
   push:
     branches: [main]
     paths: [".github/workflows/replacement-v2-preview.yml"]
-  schedule:
-    # Preview at 12:30 UTC; legacy production scan remains separate.
-    - cron: "30 12 * * *"
   workflow_dispatch:
 
 permissions:
