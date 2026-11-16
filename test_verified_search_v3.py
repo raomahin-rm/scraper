@@ -148,6 +148,22 @@ class DiscoveryTests(unittest.TestCase):
         s.get.return_value=response(data)
         _,reason=v3.verify(lead(title="Business Development Manager"),now=NOW,session=s)
         self.assertEqual(reason,"bdr_team_management")
+    def test_senior_business_development_representative_excluded(self):
+        self.assertFalse(v3.commercial_title("Senior Business Development Representative - San Francisco"))
+    def test_required_technical_degree_excluded(self):
+        data=greenhouse(title="Business Development Manager")
+        data["content"]+=" Required Education, Experience, & Skills: A technical undergraduate degree, such as Engineering, or equivalent. Twelve years of experience selling industrial technology."
+        s=Mock()
+        s.get.return_value=response(data)
+        _,reason=v3.verify(lead(title="Business Development Manager"),now=NOW,session=s)
+        self.assertEqual(reason,"specialized_education_or_seniority")
+    def test_brand_sponsorship_activation_not_enterprise_partnerships(self):
+        data=greenhouse()
+        data["content"]+=" Plan and coordinate co-marketing content, social, email, events and sponsorships; primary experience is brand marketing."
+        s=Mock()
+        s.get.return_value=response(data)
+        _,reason=v3.verify(lead(),now=NOW,session=s)
+        self.assertEqual(reason,"partnership_marketing_not_sales")
     def test_manifest_validation(self):
         s=Mock()
         s.get.return_value=response({"chunks":["jobs_chunk_0.json.gz"],"totalJobs":100})
