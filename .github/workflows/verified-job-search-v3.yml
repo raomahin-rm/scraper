@@ -6,7 +6,7 @@ on:
     branches: [main]
     paths: [".github/workflows/verified-job-search-v3.yml"]
   schedule:
-    - cron: "30 12 * * *"
+    - cron: "17 13 * * *"  # 07:17 CST / 08:17 CDT; off GitHub peak hour
   workflow_dispatch:
 
 permissions:
@@ -53,14 +53,14 @@ jobs:
           done
           test -s verified_history_v3.json || printf '{}\n' > verified_history_v3.json
       - name: Email new employer-verified jobs on schedule only
-        if: github.event_name == 'schedule'
+        if: github.event_name == 'schedule' || (github.event_name == 'push' && github.event.head_commit.message == 'One-time verified V3 catch-up email for November 16')
         env:
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           MAIL_TO: ${{ secrets.MAIL_TO }}
         run: python deliver_verified_v3.py --send
       - name: Render preview without sending email
-        if: github.event_name != 'schedule'
+        if: github.event_name != 'schedule' && github.event.head_commit.message != 'One-time verified V3 catch-up email for November 16'
         run: python deliver_verified_v3.py
       - name: Preserve delivery deduplication history
         if: github.event_name == 'schedule'
