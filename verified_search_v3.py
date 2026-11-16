@@ -388,6 +388,12 @@ def verify(job, now=None, session=None):
             return None, "bdr_team_management"
         if any(re.search(p, content.lower()) for p in SPECIALIZED_EDUCATION):
             return None, "specialized_education_or_seniority"
+        if re.search(r"\b(?:at least|minimum of|requires?)\s*(?:80|85|90|95|100)\s*%\s*(?:of the time\s*)?(?:regional )?travel\b|\b(?:travel at least|travel up to)\s*(?:80|85|90|95|100)\s*%", content.lower()):
+            return None, "excessive_required_travel"
+        if "field sales leadership" in content.lower() or "territory sales representative" in content.lower():
+            return None, "field_sales_not_target"
+        if re.search(r"\bminimum (?:of )?\d+\+? years? (?:of )?(?:automotive refinish|pharmaceutical|medical device) sales\b", content.lower()):
+            return None, "specialized_industry_requirement"
         if sum(term in content.lower() for term in MARKETING_PARTNERSHIP_TERMS) >= 3:
             return None, "partnership_marketing_not_sales"
         fresh = dict(job, company=job["company"], title=title, location=verified_location,
