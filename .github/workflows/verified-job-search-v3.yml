@@ -1,0 +1,42 @@
+name: Verified broad job search v3 (read-only audit)
+
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/verified-job-search-v3.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verified-job-search-v3
+  cancel-in-progress: false
+
+jobs:
+  discover-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: phase1-scraper-development
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Run v3 screening tests
+        run: python -m unittest test_verified_search_v3 -v
+      - name: Search broad feed and verify employers (no email, no application)
+        run: python verified_search_v3.py --hours 72 --verify 110 --limit 15
+      - name: Upload verified shortlist and screening audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verified-job-search-v3
+          retention-days: 30
+          path: |
+            verified_shortlist_v3.json
+            verified_shortlist_v3.html
+          if-no-files-found: warn
