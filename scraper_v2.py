@@ -61,23 +61,31 @@ def extract(row, data):
             location = (item.get("location") or {}).get("name", "")
             url = item.get("absolute_url", "")
             description = clean_description(item.get("content") or item.get("description"))
+            posted_on = ""
+            posted_at = item.get("first_published") or item.get("created_at") or ""
         elif kind == "lever":
             uid = str(item.get("id", ""))
             title = item.get("text", "")
             location = (item.get("categories") or {}).get("location", "")
             url = item.get("hostedUrl", "")
             description = clean_description(" ".join([str(item.get("descriptionPlain") or item.get("description") or ""), " ".join(str(x.get("text") or x.get("content") or "") for x in item.get("lists", []) if isinstance(x, dict))]))
+            posted_on = ""
+            posted_at = item.get("createdAt") or ""
         elif kind == "ashby":
             uid = str(item.get("id", ""))
             title = item.get("title", "")
             location = item.get("location", "")
             url = item.get("jobUrl", "")
             description = clean_description(item.get("descriptionPlain") or item.get("descriptionHtml") or item.get("description"))
+            posted_on = ""
+            posted_at = item.get("publishedAt") or ""
         else:
             uid = str(item.get("bulletFields", [""])[0]) if item.get("bulletFields") else str(item.get("externalPath", ""))
             title = item.get("title", "")
             location = item.get("locationsText") or item.get("locations", "")
             description = clean_description(item.get("jobDescription") or "")
+            posted_on = item.get("postedOn") or ""
+            posted_at = item.get("posted_at") or ""
             url = "https://{}.{}.myworkdayjobs.com/en-US/{}{}".format(
                 row["tenant"], row["subdomain"], row["board"], item.get("externalPath", ""))
         if not isinstance(location, str):
@@ -85,7 +93,8 @@ def extract(row, data):
         if uid and title and url:
             yield {"id": kind + ":" + (row.get("slug") or row.get("tenant", "")) + ":" + uid,
                    "company": row["name"], "title": title, "location": location,
-                   "url": canonical(url), "source": kind, "description": description}
+                   "url": canonical(url), "source": kind, "description": description,
+                   "posted_on": posted_on, "posted_at": posted_at}
 
 def scan(rows, session, delay=0.4, workday_page_size=20, workday_max_pages=100):
     jobs, failures, seen = [], [], set()
