@@ -164,6 +164,27 @@ class DiscoveryTests(unittest.TestCase):
         s.get.return_value=response(data)
         _,reason=v3.verify(lead(),now=NOW,session=s)
         self.assertEqual(reason,"partnership_marketing_not_sales")
+    def test_vsp_80_percent_travel_excluded(self):
+        data=greenhouse()
+        data["content"]+=" Ability to travel at least 80% of the time and manage named multistate field territories."
+        sess=Mock()
+        sess.get.return_value=response(data)
+        _,reason=v3.verify(lead(),now=NOW,session=sess)
+        self.assertEqual(reason,"excessive_required_travel")
+    def test_clinical_provider_field_sales_leadership_excluded(self):
+        data=greenhouse()
+        data["content"]+=" Role Type: Provider Partnerships / Field Sales Leadership / Referral Sales."
+        sess=Mock()
+        sess.get.return_value=response(data)
+        _,reason=v3.verify(lead(),now=NOW,session=sess)
+        self.assertEqual(reason,"field_sales_not_target")
+    def test_automotive_refinish_sales_required_excluded(self):
+        data=greenhouse()
+        data["content"]+=" Qualifications: Minimum 2 years of automotive refinish sales or related experience."
+        sess=Mock()
+        sess.get.return_value=response(data)
+        _,reason=v3.verify(lead(),now=NOW,session=sess)
+        self.assertEqual(reason,"specialized_industry_requirement")
     def test_manifest_validation(self):
         s=Mock()
         s.get.return_value=response({"chunks":["jobs_chunk_0.json.gz"],"totalJobs":100})
