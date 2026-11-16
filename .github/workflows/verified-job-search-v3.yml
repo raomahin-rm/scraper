@@ -28,9 +28,11 @@ jobs:
           cache: pip
       - run: pip install -r requirements.txt
       - name: Run v3 screening tests
-        run: python -m unittest test_verified_search_v3 -v
+        run: python -m unittest test_verified_search_v3 test_deliver_verified_v3 -v
       - name: Search broad feed and verify employers (no email, no application)
         run: python verified_search_v3.py --hours 72 --verify 110 --limit 15
+      - name: Render preview without sending email
+        run: python deliver_verified_v3.py
       - name: Upload verified shortlist and screening audit
         if: always()
         uses: actions/upload-artifact@v4
@@ -40,4 +42,5 @@ jobs:
           path: |
             verified_shortlist_v3.json
             verified_shortlist_v3.html
+            verified_email_v3.html
           if-no-files-found: warn
