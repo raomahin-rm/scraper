@@ -12,17 +12,21 @@ def render(payload):
         location = html.escape(str(j.get("location", "")))
         url = html.escape(str(j.get("url", "")), quote=True)
         score = html.escape(str(j.get("score", "")))
-        rows.append(f'<tr><td><a href="{url}">{title}</a></td><td>{company}</td><td>{location}</td><td>{score}</td></tr>')
-    table = "".join(rows) or '<tr><td colspan="4">No eligible jobs found</td></tr>'
-    return ('<!doctype html><html><head><meta charset="utf-8"><title>Job shortlist preview</title>'
+        age = j.get("posting_age_days")
+        posted = f"{age:g} days" if isinstance(age, (int, float)) else "Unknown"
+        rows.append(f'<tr><td><a href="{url}">{title}</a></td><td>{company}</td><td>{location}</td><td>{posted}</td><td>{score}</td></tr>')
+    table = "".join(rows) or '<tr><td colspan="5">No eligible jobs found</td></tr>'
+    return ('<!doctype html><html><head><meta charset="utf-8"><title>Job shortlist — recent postings</title>'
             '<style>body{font-family:Arial,sans-serif;max-width:1100px;margin:35px auto;color:#222}'
             'table{border-collapse:collapse;width:100%}th,td{padding:11px;border-bottom:1px solid #ddd;text-align:left}'
             'th{background:#f3f4f6}a{color:#1354a4}</style></head><body>'
-            '<h1>Daily job shortlist — preview only</h1><p>No emails were sent. '
-            'Location-ambiguous roles are excluded from this preview.</p>'
+            '<h1>Daily job shortlist — recent postings</h1><p>Only jobs with a verified posting age of 21 days or fewer are shown. '
+            'Location-ambiguous roles and repeated-application employers on cooldown are excluded.</p>'
             f'<p>US matches: {int(payload.get("total_us_matches",0))} | '
-            f'Location review: {int(payload.get("total_location_review",0))}</p>'
-            '<table><thead><tr><th>Position</th><th>Company</th><th>Location</th><th>Score</th>'
+            f'Location review: {int(payload.get("total_location_review",0))} | '
+            f'Outdated postings excluded: {int(payload.get("counts",{}).get("posting_too_old",0))} | '
+            f'Unknown posting date excluded: {int(payload.get("counts",{}).get("posting_age_unverified",0))}</p>'
+            '<table><thead><tr><th>Position</th><th>Company</th><th>Location</th><th>Posted</th><th>Score</th>'
             '</tr></thead><tbody>' + table + '</tbody></table></body></html>')
 
 def main():
