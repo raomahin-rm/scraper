@@ -5,6 +5,12 @@ def job(title, location="Chicago, IL", company="Example", uid="1"):
     return {"id":uid,"title":title,"location":location,"company":company,"url":"https://example.com/"+uid,"source":"greenhouse"}
 
 class RankingTests(unittest.TestCase):
+
+    def test_gitlab_partner_solutions_architecture_excluded(self):
+        job={"id":"gitlab-8863314002","company":"GitLab","title":"Senior Partner Solutions Manager, Strategic Partnerships","location":"Remote, United States","description":"Hands-on cloud architecture experience with AWS. Experience with CI/CD and DevSecOps, LLM APIs and model evaluation frameworks."}
+        result, reason = evaluate(job)
+        self.assertIsNone(result)
+        self.assertEqual(reason,"blocked_title")
     def test_strategic_partnerships(self):
         result, status = evaluate(job("Senior Strategic Partnerships Manager"))
         self.assertEqual(status,"accepted")
