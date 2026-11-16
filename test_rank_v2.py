@@ -1,8 +1,8 @@
 import unittest
-from rank_v2 import evaluate, shortlist, location_class
+from rank_v2 import evaluate, shortlist, location_class, posting_age_days, repeat_company_on_cooldown
 
 def job(title, location="Chicago, IL", company="Example", uid="1"):
-    return {"id":uid,"title":title,"location":location,"company":company,"url":"https://example.com/"+uid,"source":"greenhouse"}
+    return {"id":uid,"title":title,"location":location,"company":company,"url":"https://example.com/"+uid,"source":"greenhouse","posted_on":"Posted Today"}
 
 class RankingTests(unittest.TestCase):
 
@@ -11,6 +11,36 @@ class RankingTests(unittest.TestCase):
         result, reason = evaluate(job)
         self.assertIsNone(result)
         self.assertEqual(reason,"blocked_title")
+    def test_fis_workday_posted_30_plus_days_excluded(self):
+        candidate=job("Account Manager Sr Lead, Strategic Accounts", company="FIS", uid="JR0308993")
+        candidate["posted_on"]="Posted 30+ Days Ago"
+        result=shortlist([candidate])
+        self.assertEqual(result["top"], [])
+        self.assertEqual(result["counts"].get("posting_too_old"),1)
+    def test_unverified_posting_age_not_emailed(self):
+        candidate=job("Partnerships Manager")
+        candidate.pop("posted_on")
+        result=shortlist([candidate])
+        self.assertEqual(result["top"], [])
+        self.assertEqual(result["counts"].get("posting_age_unverified"),1)
+    def test_repeat_application_company_cooldown(self):
+        candidate=job("Senior Partnerships Manager", company="Stripe")
+        result=shortlist([candidate])
+        self.assertEqual(result["top"], [])
+        self.assertEqual(result["counts"].get("repeat_company_cooldown"),1)
+    def test_recent_unfamiliar_company_kept(self):
+        candidate=job("Senior Partnerships Manager", company="New Employer")
+        candidate["posted_on"]="Posted 2 Days Ago"
+        self.assertEqual(len(shortlist([candidate])["top"]),1)
+    def test_relative_posted_label_parser(self):
+        self.assertEqual(posting_age_days({"posted_on":"Posted 30+ Days Ago"}), 30)
+        self.assertEqual(posting_age_days({"posted_on":"Posted Yesterday"}), 1)
+        self.assertEqual(posting_age_days({"posted_on":"Posted 2 Weeks Ago"}), 14)
+    def test_old_iso_posting_rejected(self):
+        candidate=job("Partnerships Manager")
+        candidate.pop("posted_on")
+        candidate["posted_at"]="2024-02-02T00:00:00Z"
+        self.assertEqual(shortlist([candidate])["counts"].get("posting_too_old"),1)
     def test_strategic_partnerships(self):
         result, status = evaluate(job("Senior Strategic Partnerships Manager"))
         self.assertEqual(status,"accepted")
