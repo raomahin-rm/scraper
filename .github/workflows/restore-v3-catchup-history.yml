@@ -1,0 +1,55 @@
+name: Restore V3 catch-up email history (one-time)
+
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/restore-v3-catchup-history.yml"]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download confirmed November 16 V3 email preview
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download 43887532132 --repo "$GITHUB_REPOSITORY" -n verified-job-search-v3 -D recovered
+          test -s recovered/verified_email_v3.html
+      - name: Restore exactly 14 delivered job URLs to deduplication history
+        run: |
+          python - <<'PY'
+          import json
+          from html.parser import HTMLParser
+          from pathlib import Path
+          from urllib.parse import urlsplit
+          class Links(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.urls=[]
+              def handle_starttag(self, tag, attrs):
+                  if tag != 'a':
+                      return
+                  for key,value in attrs:
+                      if key == 'href' and value and urlsplit(value).scheme == 'https':
+                          self.urls.append(value)
+          p=Links()
+          p.feed(Path("recovered/verified_email_v3.html").read_text(encoding="utf-8"))
+          urls=set(p.urls)
+          if len(urls)!=14:
+              raise RuntimeError("Refusing to infer delivery history: expected 14 URLs, found {}".format(len(urls)))
+          history={url:{"emailed_at":"2026-11-16T14:37:19Z","source":"confirmed_catchup_43887532132"} for url in urls}
+          Path("verified_history_v3.json").write_text(json.dumps(history,indent=2),encoding="utf-8")
+          print("Recovered",len(history),"confirmed delivered job URLs")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verified-email-history-v3
+          path: verified_history_v3.json
+          retention-days: 90
+          if-no-files-found: error
