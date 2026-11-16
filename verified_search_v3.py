@@ -410,7 +410,7 @@ def build_report(result):
             esc(j["fit_tier"]), esc(j["posted_age_days"]), esc(j["fit_reason"]), esc(j["gap_reason"])))
     summary = escape_html.escape(json.dumps(result["counts"], sort_keys=True))
     return ("<!doctype html><html><head><meta charset='utf-8'><title>Verified job search</title>"
-            "<style>body{font-family:Arial,sans-serif;max-width:1050px;margin:auto;color:#1f2937}td,th{border-bottom:1px solid #ddd;padding:12px;text-align:left;vertical-align:top}table{border-collapse:collapse;width:100%}a{color:#185d9b}</style>"
+            "<style>body{{font-family:Arial,sans-serif;max-width:1050px;margin:auto;color:#1f2937}}td,th{{border-bottom:1px solid #ddd;padding:12px;text-align:left;vertical-align:top}}table{{border-collapse:collapse;width:100%}}a{{color:#185d9b}}</style>"
             "</head><body><h1>Verified commercial jobs</h1><p>Only employer-confirmed jobs with verifiable recent posting dates are shown. "
             "No applications or submissions occurred.</p><p>Scan: {}</p><table><thead><tr><th>Role & employer</th><th>Location</th><th>Tier</th><th>Age</th><th>Fit</th><th>Gap / caveat</th></tr></thead>"
             "<tbody>{}</tbody></table><h2>Screening audit</h2><pre>{}</pre></body></html>".format(
