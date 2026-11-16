@@ -42,6 +42,7 @@ TITLE_EXCLUDE = [
     r"\b(?:accountant|accounting|auditor|controller|analyst|designer|territory sales)\b",
     r"\b(?:vice president|chief|president|head of|intern)\b",
     r"\b(?:representative|territory)\b",
+    r"\binvestment strategy\b",
     r"\b(?:marketing|influencer|creator|activation|brand strategy|content|promotions?|social media)\b",
     r"\b(?:sourcing|procurement|supply chain|scm|life sciences?|biotech|clinical|pharmaceutical)\b",
 ]
@@ -393,6 +394,10 @@ def verify(job, now=None, session=None):
         if "field sales leadership" in content.lower() or "territory sales representative" in content.lower():
             return None, "field_sales_not_target"
         if re.search(r"\bminimum (?:of )?\d+\+? years? (?:of )?(?:automotive refinish|pharmaceutical|medical device) sales\b", content.lower()):
+            return None, "specialized_industry_requirement"
+        if re.search(r"\bexperience with an? (?:engineering or )?computer science foundation\b", content.lower()):
+            return None, "technical_foundation_required"
+        if re.search(r"\b(?:requirements|must have)[^.]{0,140}\b(?:at least )?\d+ years?[^.]{0,90}\bpressure sensitive adhesive(?:s| market)?\b", content.lower()):
             return None, "specialized_industry_requirement"
         if sum(term in content.lower() for term in MARKETING_PARTNERSHIP_TERMS) >= 3:
             return None, "partnership_marketing_not_sales"
