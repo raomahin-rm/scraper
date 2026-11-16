@@ -1,6 +1,9 @@
 name: Replacement v2 daily ranked job email
 
 on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/replacement-v2-preview.yml"]
   schedule:
     # Preview at 12:30 UTC; legacy production scan remains separate.
     - cron: "30 12 * * *"
@@ -45,12 +48,14 @@ jobs:
             fi
           fi
       - name: Email new ranked job opportunities
+        if: github.event_name != 'push'
         run: python deliver_v2.py --input v2_shortlist.json --history v2_history.json --preview v2_pending_preview.html --send
         env:
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           MAIL_TO: ${{ secrets.MAIL_TO }}
       - name: Save email deduplication history
+        if: github.event_name != 'push'
         uses: actions/upload-artifact@v4
         with:
           name: v2-email-history
