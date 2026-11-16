@@ -1,5 +1,5 @@
 name: Verified broad job search v3 (read-only audit)
-# Live audit after v3 screening tests
+# Live audit after additional qualification and sponsorship screening tests
 
 on:
   push:
