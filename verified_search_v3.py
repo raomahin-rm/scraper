@@ -44,6 +44,7 @@ TITLE_EXCLUDE = [
 ]
 HARD_TECHNICAL = [
     r"(?:required?|must have|hands.on|experience with|proficiency in)[^.]{0,95}(?:software engineering|cloud architecture|aws architecture|azure architecture|gcp architecture|ci/cd|devsecops|kubernetes|solution architecture|llm framework|agent framework|mcp server)",
+    r"(?:must have|hands.on|experience with)[^.]{0,100}(?:kubernetes|ci/cd|devsecops|agent frameworks?|model evaluation)\b",
     r"\b(?:architecting|building) (?:cloud|production) (?:systems|infrastructure|integrations)\b",
     r"\b(?:coding|programming) (?:in |with )?(?:python|java|go|typescript)\b",
 ]
@@ -364,10 +365,10 @@ def verify(job, now=None, session=None):
         fresh = dict(job, company=job["company"], title=title, location=verified_location,
                      description=content, posted_age_days=round(days,1),
                      employer_verified=True, verification_source=ats)
-        fresh["fit_tier"] = "Strong" if mandatory == 0 and job["prior"] == "new_company" else "Good"
+        fresh["fit_tier"] = "Strong" if mandatory == 0 and job.get("prior","new_company") == "new_company" else "Good"
         fresh["fit_reason"] = ("Commercial relationship ownership and growth" if "partnership" in title.lower()
                                else "Commercial account, channel, category or vendor management")
-        fresh["gap_reason"] = ("Prior applications at this employer" if job["prior"] == "prior_company"
+        fresh["gap_reason"] = ("Prior applications at this employer" if job.get("prior") == "prior_company"
                               else "No material qualification gap established from automated checks; review required experience")
         return fresh, "verified"
     except (requests.RequestException, ValueError, TypeError, KeyError, IndexError):
