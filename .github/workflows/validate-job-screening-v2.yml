@@ -1,0 +1,25 @@
+name: Validate job freshness and commercial fit
+
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/validate-job-screening-v2.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: phase1-scraper-development
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - name: Test freshness, exclusions, and scraper extraction
+        run: python -m unittest test_rank_v2 test_scraper_v2 -v
