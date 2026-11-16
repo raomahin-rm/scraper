@@ -102,6 +102,8 @@ def evaluate(job):
     if not title:
         return None, "no_title"
     t = title.lower()
+    if any(re.search(p, t, re.I) for p in BLOCK):
+        return None, "blocked_title"
     if re.search(r"\b(technical account manager|technical customer success|technical partnerships? manager)\b",t) and not re.search(r"enterprise|commercial|revenue|sales|renewals?|expansion|partnerships?", (job.get("description") or "").lower()):
         return None, "technical_fit_unverified"
     # A commercial-sounding title must not override mandatory hands-on engineering requirements.
@@ -113,8 +115,6 @@ def evaluate(job):
     ]
     if sum(bool(re.search(p, description)) for p in technical_requirements) >= 2:
         return None, "mandatory_technical_expertise"
-    if any(re.search(p, t, re.I) for p in BLOCK):
-        return None, "blocked_title"
     matches = [(score, label) for p, score, label in INCLUDE if re.search(p, t, re.I)]
     if not matches:
         return None, "unrelated_title"
