@@ -1,0 +1,34 @@
+name: V3 job-search acceptance test
+
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/verified-v3-acceptance.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: phase1-scraper-development
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - run: python -m unittest test_verified_search_v3 test_deliver_verified_v3 -v
+      - run: python verified_search_v3.py --hours 72 --verify 110 --limit 15
+      - run: python deliver_verified_v3.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v3-acceptance-artifacts
+          path: |
+            verified_shortlist_v3.json
+            verified_shortlist_v3.html
+            verified_email_v3.html
