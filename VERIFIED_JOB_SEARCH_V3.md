@@ -1,6 +1,6 @@
 # Job Search V3 — Employer-Verified Discovery
 
-**Current status:** V3 is implemented on `phase1-scraper-development`; the existing v2 daily mailer remains separate until v3 quality checks and live acceptance succeed. The v3 workflows are deliberately non-submitting and non-emailing during acceptance testing.
+**Current status:** V3 is implemented on `phase1-scraper-development`, scheduled daily from `.github/workflows/verified-job-search-v3.yml` on `main`, and V2 is manual-only. Manual and code-change V3 runs never send mail; only scheduled runs may email verified roles. No workflow submits applications. The first V3 scheduled email has not yet been independently confirmed.
 
 Inspired by [Heidi Miller's Daily Job Search](https://github.com/heidimillerpresents-png/claude-skills/tree/main/daily-job-search) (MIT licensed). The public cross-company feed is [Riley Dorrington's job-board-data](https://github.com/Riley-Dorrington/job-board-data) (the feed is external and its coverage, accuracy and availability are not guaranteed). Code here is independently implemented around the source's discovery/verification approach.
 
@@ -33,11 +33,11 @@ Outputs: `verified_shortlist_v3.json`, `verified_shortlist_v3.html`, with a comp
 
 Preview email without sending: `python deliver_verified_v3.py`.
 
-Email is possible only with explicit `--send` and secrets already configured. Successful SMTP delivery is recorded in a separate `verified_history_v3.json`. The v3 acceptance workflow does **not** send emails or perform submissions.
+Email is possible only with explicit `--send` and secrets already configured. Successful SMTP delivery is recorded in a separate `verified_history_v3.json`. The v3 acceptance workflow does **not** send emails or perform submissions. Only the scheduled V3 workflow may email verified matches.
 
 ## Next steps for production
 
 - Validate v3 live shortlist quality and rerun relevant tests.
-- Switch the daily scheduled workflow from v2 to v3 (and restore persistent v3 email history).
+- Verify the first scheduled V3 email successfully delivers and restores deduplication history.
 - Import fuller application history **privately** rather than publishing detailed personal application data to a public repository.
 - Add verified site checks for more ATS providers and explicit qualification-gap detection.
