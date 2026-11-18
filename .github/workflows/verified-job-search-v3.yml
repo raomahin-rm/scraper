@@ -8,6 +8,7 @@ on:
   schedule:
     - cron: "17 12 * * *"  # 06:17 CST
     - cron: "17 15 * * *"  # 09:17 CST, backup if the first is dropped
+    - cron: "47 17 * * *"  # 11:47 CST, independent late backup slot
   workflow_dispatch:
 
 permissions:
@@ -54,14 +55,14 @@ jobs:
           done
           test -s verified_history_v3.json || printf '{}\n' > verified_history_v3.json
       - name: Email new employer-verified jobs on schedule or authorized catch-up
-        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.event.head_commit.message == 'V3_CATCHUP_20261118')
         env:
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           MAIL_TO: ${{ secrets.MAIL_TO }}
         run: python deliver_verified_v3.py --send
       - name: Render preview without sending email
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && github.event.head_commit.message != 'V3_CATCHUP_20261118'
         run: python deliver_verified_v3.py
       - name: Preserve delivery deduplication history
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
@@ -70,6 +71,14 @@ jobs:
           name: verified-email-history-v3
           retention-days: 90
           path: verified_history_v3.json
+      - name: Notify by email if verification or delivery fails
+        if: failure() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event.head_commit.message == 'V3_CATCHUP_20261118')
+        continue-on-error: true
+        env:
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          MAIL_TO: ${{ secrets.MAIL_TO }}
+        run: python notify_verified_failure_v3.py
       - name: Upload verified shortlist and screening audit
         if: always()
         uses: actions/upload-artifact@v4
