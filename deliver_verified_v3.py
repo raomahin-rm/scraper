@@ -10,6 +10,8 @@ import smtplib
 import ssl
 from email.message import EmailMessage
 from pathlib import Path
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from verified_search_v3 import build_report, canon, title_key
 
 def deliver(shortlist="verified_shortlist_v3.json", history="verified_history_v3.json",
@@ -25,6 +27,12 @@ def deliver(shortlist="verified_shortlist_v3.json", history="verified_history_v3
         old=json.loads(Path(legacy_history).read_text(encoding="utf-8"))
         if isinstance(old,dict):
             legacy={(canon(entry.get("company")),title_key(entry.get("title"))) for entry in old.values() if isinstance(entry,dict)}
+    today = datetime.now(ZoneInfo("America/Chicago")).date().isoformat()
+    last_report = seen.get("__daily_report__", {})
+    if last_report.get("local_date") == today:
+        print("Daily report already emailed for", today, "; skipping duplicate")
+        Path(preview).write_text(build_report(dict(data,jobs=[])),encoding="utf-8")
+        return 0
     available=[j for j in data.get("jobs",[]) if j.get("employer_verified") and
                j.get("posted_age_days") is not None and
                j.get("url") not in seen and
@@ -36,29 +44,33 @@ def deliver(shortlist="verified_shortlist_v3.json", history="verified_history_v3
     html_body=build_report(report)
     Path(preview).write_text(html_body,encoding="utf-8")
     print("Verified new roles:",len(available),"send:",send)
-    if not send or not available:
-        print("No email sent; history unchanged.")
+    if not send:
+        print("Preview only; no email sent or history changed.")
         return len(available)
     user=os.environ["GMAIL_USER"]
     password=os.environ["GMAIL_APP_PASSWORD"]
     recipient=os.environ.get("MAIL_TO") or user
     msg=EmailMessage()
-    msg["Subject"]="Verified job shortlist: {} new commercial matches".format(len(available))
+    if available:
+        msg["Subject"]="Verified job shortlist: {} new commercial matches".format(len(available))
+        msg.set_content("\n".join("{} — {} — {} days old — {}".format(j["company"],j["title"],j["posted_age_days"],j["url"]) for j in available))
+        msg.add_alternative(html_body,subtype="html")
+    else:
+        msg["Subject"]="Verified job search: No new qualifying roles today"
+        msg.set_content("The daily job search completed. There were no new employer-verified, qualifying roles that had not already been sent. This is a successful run, not a delivery failure.")
     msg["From"]=user
     msg["To"]=recipient
-    msg.set_content("\n".join("{} — {} — {} — {}".format(j["company"],j["title"],j["posted_age_days"],j["url"]) for j in available))
-    msg.add_alternative(html_body,subtype="html")
     with smtplib.SMTP_SSL("smtp.gmail.com",465,context=ssl.create_default_context()) as smtp:
         smtp.login(user,password)
         smtp.send_message(msg)
-    from datetime import datetime,timezone
     stamp=datetime.now(timezone.utc).isoformat()
     for j in available:
         seen[j["url"]]={"company":j["company"],"title":j["title"],"emailed_at":stamp}
+    seen["__daily_report__"]={"local_date":today,"sent_at":stamp,"matches":len(available)}
     temp=Path(str(history)+".tmp")
     temp.write_text(json.dumps(seen,indent=2),encoding="utf-8")
     temp.replace(history)
-    print("Email delivered and history saved:",len(available))
+    print("Daily email delivered and history saved:",len(available),"jobs for",today)
     return len(available)
 
 def main():
