@@ -1,0 +1,63 @@
+name: Recover November 18 V3 delivery history
+
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/restore-v3-nov18-history.yml"]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore existing V3 history and today's confirmed email preview
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p previous recovered
+          previous=$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=verified-email-history-v3&per_page=100" --jq '[.artifacts[] | select(.expired == false) | .workflow_run.id] | .[0] // empty')
+          if [ -n "$previous" ]; then
+            gh run download "$previous" --repo "$GITHUB_REPOSITORY" -n verified-email-history-v3 -D previous
+          fi
+          gh run download 44369291441 --repo "$GITHUB_REPOSITORY" -n verified-job-search-v3 -D recovered
+          test -s recovered/verified_email_v3.html
+      - name: Merge 12 delivered positions and daily receipt
+        run: |
+          python - <<'PY'
+          import json
+          from html.parser import HTMLParser
+          from pathlib import Path
+          from urllib.parse import urlsplit
+          class Links(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.urls=set()
+              def handle_starttag(self, tag, attrs):
+                  if tag != 'a': return
+                  for k,v in attrs:
+                      if k == 'href' and v and urlsplit(v).scheme == 'https':
+                          self.urls.add(v)
+          parser=Links()
+          parser.feed(Path("recovered/verified_email_v3.html").read_text(encoding="utf-8"))
+          if len(parser.urls)!=12:
+              raise RuntimeError("Expected 12 emailed links; found {}".format(len(parser.urls)))
+          old=Path("previous/verified_history_v3.json")
+          seen=json.loads(old.read_text()) if old.exists() else {}
+          for url in parser.urls:
+              seen[url]={"emailed_at":"2026-11-18T18:24:38Z","source":"confirmed_delivery_44369291441"}
+          seen["__daily_report__"]={"local_date":"2026-11-18","sent_at":"2026-11-18T18:24:38Z","matches":12}
+          Path("verified_history_v3.json").write_text(json.dumps(seen,indent=2),encoding="utf-8")
+          print("Recovered 12 Nov 18 emailed listings and daily digest; total records",len(seen))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verified-email-history-v3
+          path: verified_history_v3.json
+          retention-days: 90
+          if-no-files-found: error
