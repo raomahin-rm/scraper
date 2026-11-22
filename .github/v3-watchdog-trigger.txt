@@ -1,2 +1,2 @@
 Dedicated file for the external daily watchdog. Update the date below only when daily mail is missing.
-last_check=2026-11-21
+last_check=2026-11-22
