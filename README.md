@@ -12,6 +12,29 @@ This repository now prioritizes **verified, recently published, well-matched U.S
 - Emails **up to 15** employer-verified positions on the daily schedule, grouped with fit and gap lines; uses persistent deduplication history across runs. Code-change and manual runs do **not** send email.
 - **Never submits applications.** Greenhouse application-form workflows remain independent and require explicit individual approval.
 
+
+## Automated application preparation (added November 23, 2026)
+
+The discovery-to-application connection is now live. On successful completion of
+**Verified daily job shortlist v3**, the
+[`V3 automatic application draft preparation`](.github/workflows/auto-prepare-applications-v3.yml)
+workflow imports up to 15 employer-verified openings into the existing durable
+application queue. It preserves previous status/history, avoids exact and similar
+same-employer duplicates, generates employer-specific review packets and retrieves
+public Greenhouse application questions. It never submits an application.
+
+Next, the [`V3 Greenhouse live prefill`](.github/workflows/auto-prefill-greenhouse-v3.yml)
+workflow prepares and attempts to fill new Greenhouse forms in a browser using
+the encrypted applicant inputs already available. Preview mode blocks ALL POST
+requests and document uploads; it does not create a submission. Review artifacts
+with answer data are encrypted. Other ATS providers remain manual-review only.
+
+**Latest initial results:** 48 existing records + 15 new drafts = 63 queued.
+Six live Greenhouse forms were inspected: two were blocked and four require
+additional review or answers. **Zero employer submissions were confirmed.**
+The former owner-authored, per-application approval safeguard remains active
+and is not replaced by an auto-apply permission.
+
 ## Main code
 
 Source, screening, age verification and HTML audit: [verified_search_v3.py](https://github.com/raomahin-rm/scraper/blob/phase1-scraper-development/verified_search_v3.py).
