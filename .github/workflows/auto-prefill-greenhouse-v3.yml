@@ -1,6 +1,7 @@
 name: V3 Greenhouse live prefill (never submit)
 # Downstream verified daily standing-authorization submitter runs only after this succeeds.
 # Verification: resume outstanding shortlisted jobs until a verified employer receipt exists.
+# Acceptance rerun after standing-submit encrypted-key environment handoff correction.
 
 on:
   workflow_run:
