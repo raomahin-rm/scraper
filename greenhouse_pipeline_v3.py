@@ -19,6 +19,7 @@ from application_queue_v2 import load, save
 from application_answers_v2 import draft
 from employer_questions_v2 import greenhouse_parts, API, extract_questions
 from employer_answer_matches_v2 import SENSITIVE
+from verified_form_facts_v3 import fact_answer
 from rank_v2 import evaluate
 
 REPO = "raomahin-rm/scraper"
@@ -111,6 +112,10 @@ def prepare(app, job, bank, previous, profile, contact=None, overrides=None, doc
             continue
         name = field["name"]
         value, source = suggested(question, bank)
+        if value is None:
+            fallback = fact_answer(question["label"], app, job, profile)
+            if fallback is not None:
+                value, source = fallback, "verified_non_sensitive_profile"
         if name in contact:
             value, source = contact[name], "private_contact"
         if name in overrides:
