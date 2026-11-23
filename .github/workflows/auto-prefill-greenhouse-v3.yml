@@ -88,7 +88,24 @@ jobs:
                   continue
               args=[sys.executable,'greenhouse_pipeline_v3.py','fill','--packet',str(packet),'--db',str(root/'applications_v2.json'),'--output',str(root/uid/'live')]
               result=subprocess.run(args,check=False)
-              outcomes.append({'id':uid,'status':'prefill_attempted' if result.returncode==0 else 'needs_review','exit_code':result.returncode})
+              details_path=root/uid/'live'/'result.public.json'
+              details=json.loads(details_path.read_text()) if details_path.exists() else {}
+              prepared=json.loads(packet.read_text())
+              screening=prepared.get('screening',{})
+              missing=prepared.get('missing_required') or []
+              live_review=prepared.get('live_review') or {}
+              if result.returncode != 0:
+                  status='prefill_error'
+              elif screening.get('decision') == 'blocked':
+                  status='blocked'
+              elif missing or live_review.get('errors') or live_review.get('unresolved_live_fields'):
+                  status='needs_review'
+              else:
+                  status='ready_for_review'
+              outcomes.append({'id':uid,'status':status,'exit_code':result.returncode,
+                               'missing_required_count':len(missing),
+                               'unresolved_live_field_count':len(live_review.get('unresolved_live_fields') or []),
+                               'error_count':len(live_review.get('errors') or [])})
           (root/'prefill_attempts.json').write_text(json.dumps(outcomes,indent=2))
           print('Prefill results:',json.dumps(outcomes))
           print('No employer applications submitted')
