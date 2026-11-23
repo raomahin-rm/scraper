@@ -1,0 +1,122 @@
+name: V3 Greenhouse live prefill (never submit)
+
+on:
+  workflow_run:
+    workflows: ["V3 automatic application draft preparation"]
+    types: [completed]
+  push:
+    branches: [main]
+    paths: [".github/workflows/auto-prefill-greenhouse-v3.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: v3-greenhouse-live-prefill
+  cancel-in-progress: false
+
+jobs:
+  prefill-new-greenhouse:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: phase1-scraper-development
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Validate non-submitting Greenhouse selection
+        run: python -m unittest test_prefill_new_greenhouse_v3 test_greenhouse_pipeline_v3 -v
+      - name: Download current V3 application queue safely
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN: ${{ github.event.workflow_run.id }}
+        run: |
+          set -euo pipefail
+          if [ -z "$SOURCE_RUN" ]; then
+            SOURCE_RUN=$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=application-review-queue&per_page=100" --jq '[.artifacts[] | select(.expired == false) | .workflow_run.id] | .[0] // empty')
+          fi
+          [[ "$SOURCE_RUN" =~ ^[0-9]+$ ]]
+          mkdir -p incoming runtime/source runtime/greenhouse runtime/publish
+          gh run download "$SOURCE_RUN" --repo "$GITHUB_REPOSITORY" -n application-review-queue -D incoming
+          for file in applications_v2.json tailored_application_drafts_v2.json v3_application_import_summary.json; do
+            test -s "incoming/$file"
+          done
+          python prefill_new_greenhouse_v3.py --queue incoming/applications_v2.json --summary incoming/v3_application_import_summary.json --drafts incoming/tailored_application_drafts_v2.json --output runtime/source --max 6
+          python - <<'PY'
+          import json,os
+          n=len(json.load(open('runtime/source/greenhouse_ids.json')))
+          with open(os.environ['GITHUB_ENV'],'a') as f:
+              f.write('NEEDS_PREFILL='+str(n>0).lower()+'\n')
+          print('Live Greenhouse forms to attempt:',n)
+          PY
+      - name: Unlock existing encrypted private resume and contact inputs
+        if: env.NEEDS_PREFILL == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GREENHOUSE_WRAPPING_SECRET: ${{ secrets.APPLICATION_PACKET_KEY || secrets.GMAIL_APP_PASSWORD }}
+        run: |
+          python greenhouse_private_v3.py bootstrap
+          python greenhouse_private_v3.py restore --destination runtime/private --allow-empty
+      - name: Prepare job-specific employer packets (no submission)
+        if: env.NEEDS_PREFILL == 'true'
+        run: |
+          args=()
+          if test -s runtime/private/resume.pdf; then args+=(--resume runtime/private/resume.pdf); fi
+          python greenhouse_pipeline_v3.py prepare --source runtime/source --output runtime/greenhouse --contact-json runtime/private/contact.json --overrides-json runtime/private/overrides.json "${args[@]}"
+      - name: Install headless Chromium
+        if: env.NEEDS_PREFILL == 'true'
+        run: python -m playwright install --with-deps chromium
+      - name: Prefill each live Greenhouse form without submitting or uploading
+        if: env.NEEDS_PREFILL == 'true'
+        run: |
+          python - <<'PY'
+          import json,subprocess,pathlib,sys
+          root=pathlib.Path('runtime/greenhouse')
+          ids=json.load(open('runtime/source/greenhouse_ids.json'))
+          outcomes=[]
+          for uid in ids:
+              packet=root/uid/'packet.json'
+              if not packet.exists():
+                  outcomes.append({'id':uid,'status':'packet_not_prepared'})
+                  continue
+              args=[sys.executable,'greenhouse_pipeline_v3.py','fill','--packet',str(packet),'--db',str(root/'applications_v2.json'),'--output',str(root/uid/'live')]
+              result=subprocess.run(args,check=False)
+              outcomes.append({'id':uid,'status':'prefill_attempted' if result.returncode==0 else 'needs_review','exit_code':result.returncode})
+          (root/'prefill_attempts.json').write_text(json.dumps(outcomes,indent=2))
+          print('Prefill results:',json.dumps(outcomes))
+          print('No employer applications submitted')
+          PY
+      - name: Publish only encrypted packets plus non-sensitive status
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GREENHOUSE_WRAPPING_SECRET: ${{ secrets.APPLICATION_PACKET_KEY || secrets.GMAIL_APP_PASSWORD }}
+        run: |
+          mkdir -p runtime/publish
+          python - <<'PY'
+          import json,pathlib
+          root=pathlib.Path('runtime/greenhouse')
+          results=json.loads((root/'prefill_attempts.json').read_text()) if (root/'prefill_attempts.json').is_file() else []
+          summary=json.loads((root/'summary.json').read_text()) if (root/'summary.json').is_file() else {}
+          pathlib.Path('runtime/publish/public-summary.json').write_text(json.dumps({'attempts':results,'preparation':summary.get('applications',[]),'submissions':0},indent=2))
+          PY
+          if test -s runtime/private/contact.json && test -s runtime/greenhouse/applications_v2.json; then
+            python greenhouse_private_v3.py bootstrap
+            python greenhouse_artifacts_v3.py pack runtime/greenhouse runtime/publish/packets.enc
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: greenhouse-v3-live-review
+          retention-days: 90
+          path: |
+            runtime/publish/public-summary.json
+            runtime/publish/packets.enc
+          if-no-files-found: error
