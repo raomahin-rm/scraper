@@ -38,8 +38,13 @@ jobs:
           [[ "$PREFILL_RUN" =~ ^[0-9]+$ ]]
           mkdir -p runtime/source runtime/greenhouse runtime/publish runtime/fullqueue
           gh run download "$PREFILL_RUN" --repo "$GITHUB_REPOSITORY" -n greenhouse-v3-live-review -D runtime/source
-          test -s runtime/source/packets.enc
           test -s runtime/source/public-summary.json
+          if test -s runtime/source/packets.enc; then
+            echo "NEEDS_SUBMIT=true" >> "$GITHUB_ENV"
+          else
+            echo "NEEDS_SUBMIT=false" >> "$GITHUB_ENV"
+            echo "No new or pending verified employer forms in this run."
+          fi
           QUEUE_RUN=$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=application-review-queue&per_page=100" --jq '[.artifacts[] | select(.expired == false) | .workflow_run.id] | .[0] // empty')
           [[ "$QUEUE_RUN" =~ ^[0-9]+$ ]]
           gh run download "$QUEUE_RUN" --repo "$GITHUB_REPOSITORY" -n application-review-queue -D runtime/fullqueue
@@ -47,6 +52,7 @@ jobs:
           test -s runtime/fullqueue/tailored_application_drafts_v2.json
           test -s runtime/fullqueue/v2_shortlist.json
       - name: Unlock original applicant records and approved resume
+        if: env.NEEDS_SUBMIT == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           GREENHOUSE_WRAPPING_SECRET: ${{ secrets.APPLICATION_PACKET_KEY || secrets.GMAIL_APP_PASSWORD }}
@@ -67,14 +73,16 @@ jobs:
           print("Verified",len(b),"prefilled job IDs against the durable queue")
           PY
       - name: Install Chromium for actual employer submission
+        if: env.NEEDS_SUBMIT == 'true'
         run: python -m playwright install --with-deps chromium
       - name: Submit each complete shortlisted Greenhouse form under standing authorization
+        if: env.NEEDS_SUBMIT == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           AUTO_APPLY_STANDING_APPROVAL: "2026-11-23"
         run: python daily_auto_submit_v3.py --packet-root runtime/greenhouse --source-summary runtime/source/public-summary.json
       - name: Reconcile confirmed submissions without losing earlier application history
-        if: always()
+        if: env.NEEDS_SUBMIT == 'true'
         run: |
           python - <<'PY'
           import json
@@ -128,7 +136,7 @@ jobs:
           retention-days: 90
           if-no-files-found: error
       - name: Preserve reconciled application queue
-        if: success()
+        if: env.NEEDS_SUBMIT == 'true' && success()
         uses: actions/upload-artifact@v4
         with:
           name: application-review-queue
