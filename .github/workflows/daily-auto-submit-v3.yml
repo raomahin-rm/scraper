@@ -51,13 +51,18 @@ jobs:
           test -s runtime/fullqueue/applications_v2.json
           test -s runtime/fullqueue/tailored_application_drafts_v2.json
           test -s runtime/fullqueue/v2_shortlist.json
+      - name: Initialize encrypted application key for later steps
+        if: env.NEEDS_SUBMIT == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GREENHOUSE_WRAPPING_SECRET: ${{ secrets.APPLICATION_PACKET_KEY || secrets.GMAIL_APP_PASSWORD }}
+        run: python greenhouse_private_v3.py bootstrap
       - name: Unlock original applicant records and approved resume
         if: env.NEEDS_SUBMIT == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           GREENHOUSE_WRAPPING_SECRET: ${{ secrets.APPLICATION_PACKET_KEY || secrets.GMAIL_APP_PASSWORD }}
         run: |
-          python greenhouse_private_v3.py bootstrap
           python greenhouse_private_v3.py restore --destination runtime/private
           python greenhouse_artifacts_v3.py unpack runtime/source/packets.enc runtime/greenhouse
           test -s runtime/private/resume.pdf
