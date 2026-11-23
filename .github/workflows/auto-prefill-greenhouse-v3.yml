@@ -1,4 +1,5 @@
 name: V3 Greenhouse live prefill (never submit)
+# Downstream verified daily standing-authorization submitter runs only after this succeeds.
 
 on:
   workflow_run:
