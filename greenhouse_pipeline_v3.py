@@ -1,4 +1,4 @@
-"""Greenhouse preparation and browser runner. No submission without owner approval.
+"""Greenhouse preparation and browser runner. Explicit single or daily-standing authorization.
 
 Runtime files (including contact details, resumes and screenshots) MUST stay private.
 The old queue's approved flag is deliberately not accepted as submission permission.
@@ -159,6 +159,36 @@ def validate_approval(packet, comment, owner=OWNER):
     if packet["missing_required"] or packet["screening"]["decision"] == "blocked":
         raise ValueError("Application has unresolved required answers or screening restrictions")
     return {"comment_id": comment["id"], "actor": owner, "packet_digest": approval_digest(packet), "at": created.isoformat()}
+
+def standing_approval(packet):
+    """Authorize ONLY the owner's daily-shortlist standing instruction, on a
+    protected workflow_run path. Missing fields, employer restrictions, legal
+    acknowledgements and uncertain previous attempts remain hard stops.
+    """
+    expected_env={
+        "AUTO_APPLY_STANDING_APPROVAL": "2026-11-23",
+        "GITHUB_EVENT_NAME": "workflow_run",
+        "GITHUB_REPOSITORY": REPO,
+        "GITHUB_REF": "refs/heads/main",
+    }
+    if any(os.environ.get(k) != v for k,v in expected_env.items()):
+        raise ValueError("Standing authorization unavailable outside approved daily workflow")
+    if not packet.get("live_schema") or not packet.get("live_review"):
+        raise ValueError("Live application form was not verified")
+    if packet["screening"].get("decision") == "blocked":
+        raise ValueError("Employer restrictions or insufficient role match blocked submission")
+    if packet.get("missing_required"):
+        raise ValueError("Employer required fields unanswered; cannot submit")
+    review=packet["live_review"]
+    if review.get("errors") or review.get("unresolved_live_fields"):
+        raise ValueError("Live form controls remain unanswered or have validation errors")
+    if not packet.get("documents",{}).get("resume"):
+        raise ValueError("Resume not available for submission")
+    if any(a.get("required") and a.get("value") in (None,"") for a in packet["answers"]):
+        raise ValueError("Required employer questions have not been answered")
+    return {"comment_id":"standing-auto-application-2026-11-23", "actor":OWNER,
+            "packet_digest": approval_digest(packet), "at":now()}
+
 
 def fetch_approval(comment_id, session=requests):
     if not str(comment_id).isdigit():
@@ -386,14 +416,14 @@ def allow_preview_request(method, url, documents):
     # Preparation never sends applications, telemetry or attachments to the employer.
     return method in {"GET", "HEAD", "OPTIONS"}
 
-def run_browser(packet, db_path, output, submit=False, approval_comment=None):
+def run_browser(packet, db_path, output, submit=False, approval_comment=None, autonomous=False):
     from playwright.sync_api import sync_playwright
     db = load(db_path)
     check_duplicate(db, packet)
     assert_documents(packet)
     approval = None
     if submit:
-        approval = validate_approval(packet, fetch_approval(approval_comment))
+        approval = standing_approval(packet) if autonomous else validate_approval(packet, fetch_approval(approval_comment))
     live = fetch_job(packet["url"])
     if job_fingerprint(live) != packet["job_fingerprint"]:
         raise ValueError("Job description or form changed; prepare and obtain new approval")
@@ -450,7 +480,7 @@ def run_browser(packet, db_path, output, submit=False, approval_comment=None):
                 if result["errors"] or result["unresolved_live_fields"] or result["missing_required"]:
                     raise ValueError("Live form has unresolved fields; submission blocked")
                 # Refresh approval at the last possible moment; edits/revocation are respected.
-                validate_approval(packet, fetch_approval(approval_comment))
+                standing_approval(packet) if autonomous else validate_approval(packet, fetch_approval(approval_comment))
                 assert_documents(packet)
                 event(db, packet["id"], "submission_started", approval=approval)
                 save(db_path, db)  # Persist before click: crash/timeout is NEVER auto-retried.
@@ -508,9 +538,9 @@ def public_summary(packet, result):
             "job_fingerprint": packet["job_fingerprint"], "prepared_at": packet["prepared_at"],
             "submitted": result.get("submitted", False), "submission_http_responses": result.get("submission_http_responses", []), "invalid_field_ids": result.get("invalid_field_ids", [])}
 
-def execute(packet, db_path, output, submit=False, approval_comment=None):
+def execute(packet, db_path, output, submit=False, approval_comment=None, autonomous=False):
     try:
-        return run_browser(packet, db_path, output, submit, approval_comment)
+        return run_browser(packet, db_path, output, submit, approval_comment, autonomous)
     except Exception as exc:
         db = load(db_path)
         if packet["id"] in db["applications"]:
@@ -569,7 +599,7 @@ def render_review(packet):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("action", choices=["prepare", "fill", "submit"])
+    p.add_argument("action", choices=["prepare", "fill", "submit", "auto-submit"])
     p.add_argument("--source", default="runtime/restored")
     p.add_argument("--output", default="runtime/greenhouse")
     p.add_argument("--packet")
@@ -591,7 +621,7 @@ def main():
             p.error("--packet and --db required")
         packet = json.loads(Path(a.packet).read_text())
         try:
-            result = execute(packet, a.db, a.output, a.action == "submit", a.approval_comment)
+            result = execute(packet, a.db, a.output, a.action in {"submit", "auto-submit"}, a.approval_comment, a.action == "auto-submit")
         finally:
             if a.action == "fill":
                 save(a.packet, packet)
