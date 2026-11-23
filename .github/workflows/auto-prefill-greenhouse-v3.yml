@@ -49,7 +49,7 @@ jobs:
           for file in applications_v2.json tailored_application_drafts_v2.json v3_application_import_summary.json; do
             test -s "incoming/$file"
           done
-          python prefill_new_greenhouse_v3.py --queue incoming/applications_v2.json --summary incoming/v3_application_import_summary.json --drafts incoming/tailored_application_drafts_v2.json --output runtime/source --max 6
+          python prefill_new_greenhouse_v3.py --queue incoming/applications_v2.json --summary incoming/v3_application_import_summary.json --drafts incoming/tailored_application_drafts_v2.json --output runtime/source --max 15
           python - <<'PY'
           import json,os
           n=len(json.load(open('runtime/source/greenhouse_ids.json')))
