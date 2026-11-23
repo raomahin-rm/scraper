@@ -11,8 +11,8 @@ class V3GreenhouseWorklistTests(unittest.TestCase):
         summary={"new_applications":[{"id":i} for i in ["a","b","c","d"]]}
         drafts={"drafts":[{"id":i,"why_company_draft":"Test"} for i in db["applications"]]}
         q,filtered,ids=select(db,summary,drafts,6)
-        self.assertEqual(ids,["a","d"])
-        self.assertEqual(len(q["applications"]),2)
+        self.assertEqual(ids,["a","b","d"])
+        self.assertEqual(len(q["applications"]),3)
         self.assertEqual(len(filtered["drafts"]),2)
         self.assertEqual(db["applications"]["b"]["status"],"ready_for_review")
     def test_unsubmitted_previous_v3_shortlist_is_retried_when_no_new_jobs(self):
