@@ -10,7 +10,7 @@ This repository now prioritizes **verified, recently published, well-matched U.S
 - Screens for commercial partnerships, BD, enterprise accounts, sales leadership, category/vendor management; excludes technical engineering, BDR/SDR, specialist procurement, marketing activation, hard industry gaps and roles with clear sponsorship prohibitions.
 - Checks existing application tracking and temporarily reduces repeat recommendations from seven previously overused employers.
 - Emails **up to 15** employer-verified positions on the daily schedule, grouped with fit and gap lines; uses persistent deduplication history across runs. Code-change and manual runs do **not** send email.
-- **Never submits applications.** Greenhouse application-form workflows remain independent and require explicit individual approval.
+- Application submission: the standing-authorized daily workflow can submit **complete, qualified Greenhouse applications** after browser verification and only record success when the employer returns confirmation. Employer-specific unanswered fields, blocked roles, unknown prior attempts, CAPTCHAs, and other ATS systems are not bypassed or falsely marked submitted.
 
 
 ## Automated application preparation (added November 23, 2026)
@@ -29,11 +29,11 @@ the encrypted applicant inputs already available. Preview mode blocks ALL POST
 requests and document uploads; it does not create a submission. Review artifacts
 with answer data are encrypted. Other ATS providers remain manual-review only.
 
-**Latest initial results:** 48 existing records + 15 new drafts = 63 queued.
-Six live Greenhouse forms were inspected: two were blocked and four require
-additional review or answers. **Zero employer submissions were confirmed.**
-The former owner-authored, per-application approval safeguard remains active
-and is not replaced by an auto-apply permission.
+**Initial results:** 48 existing records + 15 new drafts = 63 queued. Six Greenhouse forms were inspected: two blocked, four incomplete. The user subsequently authorized automatic daily submission of shortlisted roles. A separate, narrowly scoped auto-submit workflow now handles forms that pass all required-field, restrictions, consent, duplicate, and confirmation checks. A successful workflow is not proof that an employer accepted an application.
+
+## Standing-authorized application delivery
+
+The [daily auto-submit workflow](.github/workflows/daily-auto-submit-v3.yml) consumes the successful prefill artifact, confirms its job IDs against the durable queue, checks each complete application, and uses the employer-confirmation rule before marking a submission. Existing individual approval for legacy workflows is unchanged, while the user's new daily standing instruction applies only to this verified V3 path. Workday and Ashby submission handling is not yet supported; these cannot be promised as automatic submissions.
 
 ## Main code
 
