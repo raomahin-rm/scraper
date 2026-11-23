@@ -1,0 +1,119 @@
+name: V3 automatic application draft preparation
+
+on:
+  workflow_run:
+    workflows: ["Verified daily job shortlist v3"]
+    types: [completed]
+  push:
+    branches: [main]
+    paths: [".github/workflows/auto-prepare-applications-v3.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: v3-application-review-queue
+  cancel-in-progress: false
+
+jobs:
+  draft-queue:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: phase1-scraper-development
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Verify lead-to-draft safety checks
+        run: python -m unittest test_sync_verified_applications_v3 test_application_queue_v2 test_employer_questions_v2 -v
+      - name: Recover the verified search output and existing application queue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN: ${{ github.event.workflow_run.id }}
+        run: |
+          set -euo pipefail
+          if [ -z "$SOURCE_RUN" ]; then
+            SOURCE_RUN=$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=verified-job-search-v3&per_page=100" --jq '[.artifacts[] | select(.expired == false) | .workflow_run.id] | .[0] // empty')
+          fi
+          [[ "$SOURCE_RUN" =~ ^[0-9]+$ ]]
+          mkdir -p incoming previous-queue
+          gh run download "$SOURCE_RUN" --repo "$GITHUB_REPOSITORY" -n verified-job-search-v3 -D incoming
+          test -s incoming/verified_shortlist_v3.json
+          echo "SOURCE_RUN=$SOURCE_RUN" >> "$GITHUB_ENV"
+          previous_run=$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=application-review-queue&per_page=100" --jq '[.artifacts[] | select(.expired == false) | .workflow_run.id] | .[0] // empty')
+          [[ "$previous_run" =~ ^[0-9]+$ ]]
+          gh run download "$previous_run" --repo "$GITHUB_REPOSITORY" -n application-review-queue -D previous-queue
+          for name in applications_v2.json v2_shortlist.json tailored_application_drafts_v2.json; do
+            test -s "previous-queue/$name"
+            cp "previous-queue/$name" "$name"
+          done
+          python - <<'PY'
+          from application_queue_v2 import load
+          x=load("applications_v2.json")
+          assert x["applications"], "Queue cannot be empty"
+          print("Restored",len(x["applications"]),"existing application records")
+          PY
+      - name: Import new verified jobs without submission
+        run: python sync_verified_applications_v3.py --shortlist incoming/verified_shortlist_v3.json --source-run-id "$SOURCE_RUN"
+      - name: Generate job-specific application reviews and preserve tailored drafts
+        run: |
+          python application_review_packets_v2.py --db applications_v2.json --bank application_answers_v2.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from tailored_application_drafts_v2 import prepare
+          summary=json.loads(Path("v3_application_import_summary.json").read_text())
+          ids={x["id"] for x in summary["new_applications"]}
+          packets=json.loads(Path("application_review_packets_v2.json").read_text())["packets"]
+          new=[p for p in packets if p["id"] in ids]
+          Path("v3_new_review_packets.json").write_text(json.dumps({"count":len(new),"packets":new},indent=2))
+          previous=json.loads(Path("tailored_application_drafts_v2.json").read_text())
+          old_drafts=previous.get("drafts",[])
+          known={x["id"] for x in old_drafts}
+          updated=old_drafts+[prepare(p) for p in new if p["id"] not in known]
+          Path("tailored_application_drafts_v2.json").write_text(json.dumps({"count":len(updated),"drafts":updated},indent=2))
+          print("New employer-linked review packets:",len(new),"preserved prior drafts:",len(old_drafts))
+          PY
+      - name: Retrieve exact employer questions for new job drafts
+        run: python employer_questions_v2.py --packets v3_new_review_packets.json --output v3_new_employer_questions.json
+      - name: Match employer questions to approved answer templates
+        run: python employer_answer_matches_v2.py --questions v3_new_employer_questions.json --bank application_answers_v2.json --output v3_new_answer_matches.json
+      - name: Save updated durable review queue
+        uses: actions/upload-artifact@v4
+        with:
+          name: application-review-queue
+          retention-days: 90
+          path: |
+            applications_v2.json
+            v2_shortlist.json
+            tailored_application_drafts_v2.json
+            application_review_packets_v2.json
+            application_review_packets_v2.md
+            v3_application_import_summary.json
+            v3_new_review_packets.json
+            v3_new_employer_questions.json
+            v3_new_answer_matches.json
+          if-no-files-found: error
+      - name: Email new review packets with accurate no-submission status
+        if: github.event_name == 'workflow_run'
+        env:
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          MAIL_TO: ${{ secrets.MAIL_TO }}
+        run: python notify_application_preparation_v3.py
+      - name: Confirm no applications were submitted by this workflow
+        run: |
+          python - <<'PY'
+          import json
+          d=json.load(open("v3_application_import_summary.json"))
+          assert d["submitted"] == 0
+          print("Verified drafts newly queued:",len(d["new_applications"]))
+          print("Submissions: 0; per-job approval and employer confirmation still required")
+          PY
