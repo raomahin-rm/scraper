@@ -13,12 +13,21 @@ def select(db, summary, drafts, limit=6):
     selected={}
     selected_drafts=[]
     indexed={d.get("id"):d for d in drafts.get("drafts",[])}
-    for row in summary.get("new_applications",[]):
+    # Process prior verified V3 shortlists until they are submitted or closed.
+    candidates=list(summary.get("new_applications",[]))
+    present={x.get("id") for x in candidates}
+    for uid,app in db["applications"].items():
+        if uid not in present and app.get("discovery_source") == "verified_search_v3":
+            if app.get("pipeline_status") not in {"submission_started","submission_unknown","submitted"}:
+                candidates.append({"id":uid})
+    for row in candidates:
         if len(ids)>=limit:
             break
         uid=row.get("id")
         app=db["applications"].get(uid)
-        if not app or app.get("status")!="draft":
+        if not app or app.get("status") not in {"draft","ready_for_review"}:
+            continue
+        if app.get("pipeline_status") in {"submission_started","submission_unknown","submitted"}:
             continue
         if not greenhouse_parts(app.get("url","")):
             continue
