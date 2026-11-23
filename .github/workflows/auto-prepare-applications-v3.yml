@@ -101,13 +101,6 @@ jobs:
             v3_new_employer_questions.json
             v3_new_answer_matches.json
           if-no-files-found: error
-      - name: Email new review packets with accurate no-submission status
-        if: github.event_name == 'workflow_run'
-        env:
-          GMAIL_USER: ${{ secrets.GMAIL_USER }}
-          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-          MAIL_TO: ${{ secrets.MAIL_TO }}
-        run: python notify_application_preparation_v3.py
       - name: Confirm no applications were submitted by this workflow
         run: |
           python - <<'PY'
