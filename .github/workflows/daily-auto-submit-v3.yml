@@ -1,0 +1,151 @@
+name: V3 standing-authorized daily application submit
+
+on:
+  workflow_run:
+    workflows: ["V3 Greenhouse live prefill (never submit)"]
+    types: [completed]
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: v3-standing-auto-submit
+  cancel-in-progress: false
+
+jobs:
+  submit-qualified-greenhouse:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: phase1-scraper-development
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Test standing authorization and confirmed-submission safeguards
+        run: python -m unittest test_greenhouse_standing_autosubmit_v3 test_daily_auto_submit_v3 test_greenhouse_pipeline_v3 -v
+      - name: Recover only the successful triggering prefill and durable application queue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREFILL_RUN: ${{ github.event.workflow_run.id }}
+        run: |
+          set -euo pipefail
+          [[ "$PREFILL_RUN" =~ ^[0-9]+$ ]]
+          mkdir -p runtime/source runtime/greenhouse runtime/publish runtime/fullqueue
+          gh run download "$PREFILL_RUN" --repo "$GITHUB_REPOSITORY" -n greenhouse-v3-live-review -D runtime/source
+          test -s runtime/source/packets.enc
+          test -s runtime/source/public-summary.json
+          QUEUE_RUN=$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=application-review-queue&per_page=100" --jq '[.artifacts[] | select(.expired == false) | .workflow_run.id] | .[0] // empty')
+          [[ "$QUEUE_RUN" =~ ^[0-9]+$ ]]
+          gh run download "$QUEUE_RUN" --repo "$GITHUB_REPOSITORY" -n application-review-queue -D runtime/fullqueue
+          test -s runtime/fullqueue/applications_v2.json
+          test -s runtime/fullqueue/tailored_application_drafts_v2.json
+          test -s runtime/fullqueue/v2_shortlist.json
+      - name: Unlock original applicant records and approved resume
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GREENHOUSE_WRAPPING_SECRET: ${{ secrets.APPLICATION_PACKET_KEY || secrets.GMAIL_APP_PASSWORD }}
+        run: |
+          python greenhouse_private_v3.py bootstrap
+          python greenhouse_private_v3.py restore --destination runtime/private
+          python greenhouse_artifacts_v3.py unpack runtime/source/packets.enc runtime/greenhouse
+          test -s runtime/private/resume.pdf
+          test -s runtime/greenhouse/applications_v2.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          a=json.loads(Path('runtime/fullqueue/applications_v2.json').read_text())['applications']
+          b=json.loads(Path('runtime/greenhouse/applications_v2.json').read_text())['applications']
+          for uid,app in b.items():
+              assert uid in a, 'Prefilled application not in durable queue'
+              assert app['url']==a[uid]['url'], 'Source queue job mismatch'
+          print("Verified",len(b),"prefilled job IDs against the durable queue")
+          PY
+      - name: Install Chromium for actual employer submission
+        run: python -m playwright install --with-deps chromium
+      - name: Submit each complete shortlisted Greenhouse form under standing authorization
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AUTO_APPLY_STANDING_APPROVAL: "2026-11-23"
+        run: python daily_auto_submit_v3.py --packet-root runtime/greenhouse --source-summary runtime/source/public-summary.json
+      - name: Reconcile confirmed submissions without losing earlier application history
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path("runtime")
+          source=root/"fullqueue"/"applications_v2.json"
+          isolated=root/"greenhouse"/"applications_v2.json"
+          results=root/"greenhouse"/"auto-submit-public-summary.json"
+          if not all(p.is_file() for p in (source,isolated,results)):
+              print("Submission inputs unavailable; cannot reconcile")
+              raise SystemExit(0)
+          full=json.loads(source.read_text())
+          subset=json.loads(isolated.read_text())
+          rows=json.loads(results.read_text())["applications"]
+          for r in rows:
+              uid=r["id"]
+              if uid not in full["applications"] or uid not in subset["applications"]:
+                  raise ValueError("Unexpected application ID in outcome")
+              base=full["applications"][uid]
+              trial=subset["applications"][uid]
+              status=r["status"]
+              if status=="confirmed_submitted":
+                  if trial.get("status")!="submitted" or not trial.get("confirmation"):
+                      raise ValueError("Submission confirmation missing from private ledger")
+                  base["status"]="submitted"
+                  base["confirmation"]="Employer confirmation retained privately"
+                  base["pipeline_status"]="submitted"
+              elif status=="submission_unknown":
+                  base["pipeline_status"]="submission_unknown"
+              base.setdefault("events",[]).append({"status":status,"source":"v3_daily_standing_approved_submit"})
+          source.write_text(json.dumps(full,indent=2))
+          print("Durable queue updated with",len(rows),"submission outcomes")
+          PY
+      - name: Preserve encrypted application evidence and sanitized outcome counts
+        if: always()
+        run: |
+          mkdir -p runtime/publish
+          if test -s runtime/greenhouse/auto-submit-public-summary.json; then
+            cp runtime/greenhouse/auto-submit-public-summary.json runtime/publish/public-summary.json
+          else
+            printf '{"applications":[],"confirmed_submitted":0,"error":"runner_failed_before_summary"}\n' > runtime/publish/public-summary.json
+          fi
+          if test -s runtime/greenhouse/applications_v2.json && test -n "$APPLICATION_PACKET_KEY"; then
+            python greenhouse_artifacts_v3.py pack runtime/greenhouse runtime/publish/packets.enc
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v3-automatic-employer-submission
+          path: runtime/publish/**
+          retention-days: 90
+          if-no-files-found: error
+      - name: Preserve reconciled application queue
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: application-review-queue
+          path: |
+            runtime/fullqueue/applications_v2.json
+            runtime/fullqueue/tailored_application_drafts_v2.json
+            runtime/fullqueue/v2_shortlist.json
+            runtime/fullqueue/v3_application_import_summary.json
+          retention-days: 90
+      - name: Email actual submission outcomes instead of unsubmitted drafts
+        if: always()
+        continue-on-error: true
+        env:
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          MAIL_TO: ${{ secrets.MAIL_TO }}
+        run: |
+          if test -s runtime/greenhouse/auto-submit-public-summary.json; then
+            python notify_auto_submissions_v3.py
+          fi
