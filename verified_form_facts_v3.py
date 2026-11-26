@@ -11,14 +11,23 @@ def fact_answer(label, app, job, profile):
     q=re.sub(r"\s+"," ",label or "").strip().lower()
     if re.search(r"linkedin\s*(?:profile|url)?",q):
         return LINKEDIN
-    if re.search(r"(?:what|which|your)\s+(?:time\s*zone|timezone)|time zone you most",q):
+    if re.search(r"(?:what|which|your).*?(?:time\s*zone|timezone)|(?:time\s*zone|timezone) you most",q):
         return "Central Time (CT)"
-    if re.search(r"confirm (?:you.re|you are) based in (?:the\s+)?(?:usa|united states)|based in the usa",q):
+    if re.search(r"(?:confirm|are you|only considering).*?(?:based|located).*?(?:usa|united states)|based in the usa",q):
         return "Yes, I am based in Chicago, Illinois, USA."
     if re.search(r"\b(?:travel|traveling)\b",q) and re.search(r"\b(?:10-15%|50%|commit|comfortable)\b",q):
         return "Yes, I am comfortable with the stated travel requirements."
-    if re.search(r"how did you (?:initially )?hear about (?:this|the) job",q):
+    if re.search(r"how did you (?:initially )?hear about",q):
         return "Online job posting."
+    if re.search(r"how soon (?:would you be|are you) available to start",q):
+        return "Three weeks"
+    if re.search(r"what city and state do you live in|what is your current (?:city|location)",q):
+        return "Chicago, Illinois"
+    if re.search(r"^(?:current employer|current job title)$",q):
+        experience=profile.get("verified_experience") or []
+        current=next((e for e in experience if e.get("period","").lower().endswith("present")),None)
+        if current:
+            return current.get("employer") if q=="current employer" else current.get("role")
     if re.search(r"\b(?:are you|do you)\s+(?:at least|over)\s+18\b",q):
         return "Yes"
     if re.search(r"(?:compensation|pay|salary)\s+range",q) and re.search(r"comfortable moving forward|feel comfortable|meets your expectations",q):
