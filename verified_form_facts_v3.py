@@ -70,6 +70,11 @@ def fact_answer(label, app, job, profile):
     if confirmation is not None:
         return confirmation
     q=re.sub(r"\s+"," ",label or "").strip().lower()
+    if (re.search(r"are you currently authorized to work in the country",q)
+            and re.search(r"country (?:outlined|listed) for this job",q)):
+        loc=(job.get("location") or {}).get("name","")
+        if re.search(r"\b(?:united states|usa|u\.s\.|chicago|new york|california|illinois|remote[- ]us)\b",loc,re.I):
+            return "Yes"
     if re.search(r"linkedin\s*(?:profile|url)?",q):
         return LINKEDIN
     if re.search(r"(?:what|which|your).*?(?:time\s*zone|timezone)|(?:time\s*zone|timezone) you most",q):
