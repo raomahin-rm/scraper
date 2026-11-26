@@ -99,7 +99,7 @@ def tailor(app, job, previous, profile):
             "source_draft": previous, "job_description_themes": themes,
             "evidence_sources": relevant, "requires_individual_review": True}
 
-def match_employer_option(value, allowed):
+def match_employer_option(value, allowed, question_label=""):
     """Use only unique semantically equivalent options; never infer consent."""
     if value is None or not allowed:
         return value
@@ -118,6 +118,27 @@ def match_employer_option(value, allowed):
         possible=[x for x in labels if x.casefold() in safe_variants[original]]
         if len(possible)==1:
             return possible[0]
+    q=question_label.casefold().strip()
+    if original=="no" and re.search(r"have you.*?(?:worked|employed)|were you.*?employed",q):
+        choices=[x for x in labels if re.fullmatch(r"I have not worked at [\w\s.-]+",x,re.I)]
+        if len(choices)==1:
+            return choices[0]
+    if ("central time" in original) and re.search(r"time\s*zone|timezone",q):
+        choices=[x for x in labels if x.casefold() == "central time"]
+        if len(choices)==1:
+            return choices[0]
+    if re.search(r"confirm.*based in.*(?:usa|united states)",q) and "based in chicago" in original:
+        choices=[x for x in labels if re.search(r"^Yes, I.m currently based in the USA\.?$",x,re.I)]
+        if len(choices)==1:
+            return choices[0]
+    if re.search(r"(?:travel to|travel requirements)",q) and "comfortable" in original and "travel" in original:
+        choices=[x for x in labels if re.search(r"^Yes, I am willing to complete travel requirements\.?$",x,re.I)]
+        if len(choices)==1:
+            return choices[0]
+    if re.search(r"pay range.*(?:comfortable|moving forward)",q) and original.startswith("yes, i am comfortable"):
+        choices=[x for x in labels if x.casefold()=="yes"]
+        if len(choices)==1:
+            return choices[0]
     if original=="online job posting":
         # Public feed/online posting; never substitute a specific referral provider.
         for pattern in (r"^online job (?:posting|board)$",r"^job (?:board|posting)$",r"^other$"):
@@ -153,7 +174,7 @@ def prepare(app, job, bank, previous, profile, contact=None, overrides=None, doc
             raise ValueError("Document unavailable: " + name)
         allowed = field.get("values", [])
         if value is not None and allowed:
-            matched=match_employer_option(value, allowed)
+            matched=match_employer_option(value, allowed, question["label"])
             if matched is None:
                 value, source = None, "answer_not_in_employer_options"
             else:
