@@ -155,3 +155,8 @@ class EmployerOptionMappingTests(unittest.TestCase):
         self.assertIsNone(match_employer_option("Yes",vals(["Yes, permanently","No"])))
         self.assertIsNone(match_employer_option("Online job posting",vals(["LinkedIn","Employee referral"])))
         self.assertIsNone(match_employer_option(None,vals(["Yes","No"])))
+        self.assertEqual(match_employer_option("No",vals(["I am a previous employee","I have not worked at DoorDash"]),"Have you worked at DoorDash?"),"I have not worked at DoorDash")
+        self.assertEqual(match_employer_option("Central Time (CT)",vals(["Eastern Time","Central Time"]),"What is the Time Zone you operate in?"),"Central Time")
+        self.assertEqual(match_employer_option("Yes, I am based in Chicago, Illinois, USA.",vals(["Yes, I'm currently based in the USA.","No"]),"Please confirm you're based in the USA."),"Yes, I'm currently based in the USA.")
+        self.assertEqual(match_employer_option("Yes, I am comfortable with the stated travel requirements.",vals(["Yes, I am willing to complete travel requirements.","No"]),"Travel to client sites. Please confirm travel requirements."),"Yes, I am willing to complete travel requirements.")
+
