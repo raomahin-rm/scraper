@@ -111,7 +111,11 @@ def match_employer_option(value, allowed):
         return exact[0]
     original=str(value).strip().casefold()
     if original in {"yes","no"}:
-        possible=[x for x in labels if re.match(r"^"+re.escape(original)+r"(?:$|[,;.! ]|\s*[-–])",x,re.I)]
+        safe_variants={
+            "yes": {"yes","yes, i do","yes, i have","yes, i am"},
+            "no": {"no","no, i do not","no, i have not","no, i haven't","no, never"},
+        }
+        possible=[x for x in labels if x.casefold() in safe_variants[original]]
         if len(possible)==1:
             return possible[0]
     if original=="online job posting":
