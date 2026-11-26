@@ -35,7 +35,7 @@ jobs:
           cache: pip
       - run: pip install -r requirements.txt
       - name: Validate non-submitting Greenhouse selection
-        run: python -m unittest test_prefill_new_greenhouse_v3 test_greenhouse_pipeline_v3 -v
+        run: python -m unittest test_prefill_new_greenhouse_v3 test_greenhouse_pipeline_v3 test_verified_form_facts_v3 -v
       - name: Download current V3 application queue safely
         env:
           GH_TOKEN: ${{ github.token }}
