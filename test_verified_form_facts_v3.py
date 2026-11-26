@@ -16,6 +16,15 @@ class VerifiedFormFactsTests(unittest.TestCase):
         self.assertIn("$700K",a)
     def test_linkedin(self):
         self.assertTrue(self.answer("LinkedIn Profile").startswith("https://www.linkedin.com/"))
+    def test_live_real_field_labels(self):
+        self.assertIn("Chicago",self.answer("Due to current team needs, we are only considering candidates based in the USA. Please confirm you're based in the USA."))
+        self.assertIn("Central",self.answer("What is the Time Zone you most commonly operate in?"))
+        self.assertEqual(self.answer("How did you hear about Mixpanel as an Employer?"),"Online job posting.")
+        self.assertEqual(self.answer("How soon would you be available to start?"),"Three weeks")
+    def test_current_employment_from_profile(self):
+        profile={"verified_experience":[{"employer":"University of Chicago Booth School of Business","role":"Custom Program Learning Specialist","period":"October 2026 - Present"}]}
+        self.assertIn("University of Chicago",fact_answer("Current Employer",APP,{},profile))
+        self.assertEqual(fact_answer("Current Job Title",APP,{},profile),"Custom Program Learning Specialist")
     def test_never_infer_consent_or_sponsorship(self):
         for q in ["Applicant Privacy Acknowledgement",
                   "Do you require sponsorship now or in the future?",
