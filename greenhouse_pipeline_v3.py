@@ -99,6 +99,29 @@ def tailor(app, job, previous, profile):
             "source_draft": previous, "job_description_themes": themes,
             "evidence_sources": relevant, "requires_individual_review": True}
 
+def match_employer_option(value, allowed):
+    """Use only unique semantically equivalent options; never infer consent."""
+    if value is None or not allowed:
+        return value
+    labels=[str(x.get("label","")).strip() for x in allowed]
+    if str(value) in labels:
+        return str(value)
+    exact=[x for x in labels if x.casefold()==str(value).casefold()]
+    if len(exact)==1:
+        return exact[0]
+    original=str(value).strip().casefold()
+    if original in {"yes","no"}:
+        possible=[x for x in labels if re.match(r"^"+re.escape(original)+r"(?:$|[,;.! ]|\s*[-–])",x,re.I)]
+        if len(possible)==1:
+            return possible[0]
+    if original=="online job posting":
+        # Public feed/online posting; never substitute a specific referral provider.
+        for pattern in (r"^online job (?:posting|board)$",r"^job (?:board|posting)$",r"^other$"):
+            possible=[x for x in labels if re.match(pattern,x,re.I)]
+            if len(possible)==1:
+                return possible[0]
+    return None
+
 def prepare(app, job, bank, previous, profile, contact=None, overrides=None, documents=None):
     contact, overrides, documents = contact or {}, overrides or {}, documents or {}
     answers, pending = [], []
@@ -125,8 +148,12 @@ def prepare(app, job, bank, previous, profile, contact=None, overrides=None, doc
         if source == "private_document" and not Path(value).is_file():
             raise ValueError("Document unavailable: " + name)
         allowed = field.get("values", [])
-        if value is not None and allowed and str(value) not in [str(x["label"]) for x in allowed]:
-            value, source = None, "answer_not_in_employer_options"
+        if value is not None and allowed:
+            matched=match_employer_option(value, allowed)
+            if matched is None:
+                value, source = None, "answer_not_in_employer_options"
+            else:
+                value=matched
         if question["required"] and value in (None, ""):
             pending.append(question["label"])
         answers.append({"name": name, "label": question["label"], "required": question["required"],
