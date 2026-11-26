@@ -555,13 +555,14 @@ def execute(packet, db_path, output, submit=False, approval_comment=None, autono
                 save(db_path, db)
         raise
 
-def batch(source, output, contact=None, overrides=None, documents=None):
+def batch(source, output, contact=None, overrides=None, documents=None, confirmed=None):
     source, output = Path(source), Path(output)
     db = load(source / "applications_v2.json")
     if not db["applications"]:
         raise ValueError("Existing queue is missing/empty; refusing to rebuild application history")
     bank = json.loads(Path("application_answers_v2.json").read_text())
     profile = json.loads(Path("commercial_profile_v2.json").read_text())
+    profile["_confirmed"] = confirmed or {}
     previous = {d["id"]: d for d in json.loads((source / "tailored_application_drafts_v2.json").read_text())["drafts"]}
     rows = []
     for app in db["applications"].values():
@@ -614,10 +615,11 @@ def main():
     p.add_argument("--overrides-json")
     p.add_argument("--resume")
     p.add_argument("--cover-letter")
+    p.add_argument("--confirmed-answers")
     a = p.parse_args()
     if a.action == "prepare":
         read = lambda path: json.loads(Path(path).read_text()) if path else {}
-        rows = batch(a.source, a.output, read(a.contact_json), read(a.overrides_json), ({"resume": a.resume} if a.resume else {}) | ({"cover_letter": a.cover_letter} if a.cover_letter else {}))
+        rows = batch(a.source, a.output, read(a.contact_json), read(a.overrides_json), ({"resume": a.resume} if a.resume else {}) | ({"cover_letter": a.cover_letter} if a.cover_letter else {}), read(a.confirmed_answers))
         from collections import Counter
         print(dict(Counter(r["status"] for r in rows)))
         print("Submissions: 0")
