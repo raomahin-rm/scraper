@@ -142,3 +142,15 @@ class ReconciliationTests(unittest.TestCase):
                 else:
                     with self.assertRaises(ValueError):g.durable_attempt(packet,approved,session=session)
                     session.put.assert_not_called()
+
+
+class EmployerOptionMappingTests(unittest.TestCase):
+    def test_only_unambiguous_equivalent_choices(self):
+        from greenhouse_pipeline_v3 import match_employer_option
+        vals=lambda labels:[{"label":v} for v in labels]
+        self.assertEqual(match_employer_option("No",vals(["Yes","No, I have not"])),"No, I have not")
+        self.assertEqual(match_employer_option("Yes",vals(["No","Yes, I agree"])),"Yes, I agree")
+        self.assertEqual(match_employer_option("Online job posting",vals(["Referral","Other","LinkedIn"])),"Other")
+        self.assertIsNone(match_employer_option("Yes",vals(["Yes, I agree","Yes, I refuse"])))
+        self.assertIsNone(match_employer_option("Online job posting",vals(["LinkedIn","Employee referral"])))
+        self.assertIsNone(match_employer_option(None,vals(["Yes","No"])))
