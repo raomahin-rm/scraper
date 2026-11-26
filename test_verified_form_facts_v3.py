@@ -25,6 +25,28 @@ class VerifiedFormFactsTests(unittest.TestCase):
         profile={"verified_experience":[{"employer":"University of Chicago Booth School of Business","role":"Custom Program Learning Specialist","period":"October 2026 - Present"}]}
         self.assertIn("University of Chicago",fact_answer("Current Employer",APP,{},profile))
         self.assertEqual(fact_answer("Current Job Title",APP,{},profile),"Custom Program Learning Specialist")
+    def test_confirmed_private_user_answers(self):
+        policy={"prior_employment_at_named_employers":"none",
+                "restrictive_agreements":"none",
+                "salary_preference":"advertised_range_midpoint",
+                "voluntary_demographics":"individual_review",
+                "recruiter_sms":"yes",
+                "privacy_and_recording":"individual_review",
+                "specialized_experience":"none"}
+        profile=dict(PROFILE,_confirmed=policy)
+        self.assertEqual(fact_answer("Have you worked at DoorDash?",dict(APP,company="doordashusa"),{},profile),"No")
+        self.assertEqual(fact_answer("Have you ever been employed by Mozilla before?",dict(APP,company="mozilla"),{},profile),"No")
+        self.assertEqual(fact_answer("Are you subject to any non-compete or non-solicitation agreements?",APP,{},profile),"No")
+        self.assertEqual(fact_answer("Would you like to receive communications via SMS and/or WhatsApp?",APP,{},profile),"Yes")
+        self.assertEqual(fact_answer("Do you have experience working with Fortune 500 customers?",APP,{},profile),"No")
+        self.assertEqual(fact_answer("What salary range are you looking for?",APP,{"content":""},profile),"$90,000")
+        self.assertEqual(fact_answer("What is your expected salary range?",APP,{"content":"Base salary range: $116,900 - $137,500 annually."},profile),"$127,200")
+        for consent in ("Applicant Privacy Acknowledgement", "Please acknowledge the Interview Recording Policy",
+                        "Your gender", "I identify my ethnicity as"):
+            self.assertIsNone(fact_answer(consent,APP,{},profile))
+    def test_unconfirmed_company_history_is_not_inferred(self):
+        p=dict(PROFILE,_confirmed={"prior_employment_at_named_employers":"none"})
+        self.assertIsNone(fact_answer("Have you ever been employed by Acme before?",dict(APP,company="acme"),{},p))
     def test_never_infer_consent_or_sponsorship(self):
         for q in ["Applicant Privacy Acknowledgement",
                   "Do you require sponsorship now or in the future?",
