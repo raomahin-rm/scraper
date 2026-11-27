@@ -87,6 +87,8 @@ def fact_answer(label, app, job, profile):
         return "Online job posting."
     if re.search(r"how soon (?:would you be|are you) available to start",q):
         return "Three weeks"
+    if re.search(r"what state do you (?:currently )?reside in|what is your state of residence",q):
+        return "Illinois"
     if re.search(r"what city and state do you live in|what is your current (?:city|location)",q):
         return "Chicago, Illinois"
     if re.search(r"^(?:current employer|current job title)$",q):
