@@ -8,6 +8,9 @@ class VerifiedFormFactsTests(unittest.TestCase):
         return fact_answer(q,APP,{},PROFILE)
     def test_location(self):
         self.assertIn("Chicago",self.answer("Please confirm you're based in the USA."))
+    def test_residence_state_matches_existing_confirmed_location(self):
+        self.assertEqual(self.answer("What state do you reside in?"), "Illinois")
+        self.assertEqual(self.answer("What is your state of residence?"), "Illinois")
     def test_timezone(self):
         self.assertIn("Central",self.answer("What is the Time Zone you most commonly operate in?"))
     def test_verified_motivation(self):
